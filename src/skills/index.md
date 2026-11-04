@@ -6,6 +6,7 @@ What the agent knows besides its tools, in the AutoSAM skill format: one folder 
 | Skill | Folder | What it covers |
 |---|---|---|
 | Core workflow | `core/` | how to work: tools first, never block on a run, the user approves every start, report numbers with their errors and assumptions, facility-data labels |
+| OpenMC authoring | `openmc-authoring/` | writing a model of any system: the case spec, and one rule file per part of the model (materials, geometry, lattices, settings, sources, tallies, normalisation, dose, plots, variance reduction, multigroup, depletion, CAD and meshes, nuclear data, photons, openmc.lib, volumes, common mistakes), read on demand; a build-script template |
 | OpenMC execution | `openmc-execution/` | the job tools: start (a plan the user approves), check, pause, resume, stop, cancel; statuses; start-up time; sequences |
 | OpenMC post-processing | `openmc-post-processing/` | reading a run: k-eff and its error, active batches, worths in pcm and dollars, plausibility checks, tallies |
 | Files, documents, web and Python | `general-tools/` | which general tool when; knowledge bases (make, then search, cite file and page); what leaves the machine through the web; Python runs the user approves; what each refuses |

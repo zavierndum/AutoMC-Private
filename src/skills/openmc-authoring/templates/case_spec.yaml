@@ -1,0 +1,45 @@
+# What to know before writing build.py: fill every field from the user's description, mark each value you chose yourself under
+# assumptions, and put what is still missing under open_questions. Ask about the open questions that change the answer before you
+# build; state the others with the result. Units: cm, eV, K, g/cm3, particles per second. AutoMC's own template (no source text).
+
+problem:
+  name: water-sphere-dose              # the case name: lower case, digits and hyphens; subfolders allowed
+  question: "dose rate at the sphere from the source"     # what the user wants answered, in their words
+  quantity: effective dose rate, uSv/h # what is reported, with its units and normalisation (rules/normalization.md)
+  reference: analytic uncollided flux  # what the answer can be checked against: analytic, a benchmark, another run, none
+  nearest_example: point-source-sphere-dose               # working_examples/index.md
+
+geometry:                              # rules/geometry.md, rules/universes-and-lattices.md
+  - {part: target sphere, shape: sphere, radius_cm: 2.5, centre_cm: [15.0, 0.0, 0.0], material: water}
+  - {part: surroundings, shape: sphere, radius_cm: 100.0, centre_cm: [0.0, 0.0, 0.0], material: void, boundary: vacuum}
+  symmetry: none                       # reflective sides, a sector, a lattice cell: say what it assumes
+
+materials:                             # rules/materials.md: fractions by atom or weight, a density, S(a,b), a temperature
+  - name: water
+    composition: {H: 2, O: 1}
+    fractions: atom                    # atom | weight
+    density: {value: 1.0, units: g/cm3}
+    s_alpha_beta: c_H_in_H2O
+    temperature_K: 294
+
+source:                                # rules/sources.md
+  particle: neutron                    # neutron | photon
+  space: {kind: point, at_cm: [0.0, 0.0, 0.0]}
+  angle: isotropic
+  energy: {kind: discrete, eV: [2.0e6]}
+  strength_per_s: 1.0e8                # sets the units of fixed-source tallies (rules/normalization.md)
+
+tallies:                               # rules/tallies.md, rules/dose.md
+  - {name: dose in the target, where: target sphere, score: flux, response: ICRP-116 neutron AP}
+
+run:                                   # rules/settings.md
+  mode: fixed source                   # eigenvalue | fixed source
+  sizes:
+    quick: {particles: 10000, batches: 10}
+    reference: {particles: 200000, batches: 20}
+
+assumptions:                           # every value above that the user did not give
+  - the source energy is 2 MeV (not given)
+  - effective dose in the AP geometry (the quantity was not given)
+
+open_questions: []                     # what is still unknown; ask before building if it changes the answer
