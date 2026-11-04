@@ -4,7 +4,7 @@ How skills are loaded, and how they are added. Ported from AutoSAM's SKILL_POLIC
 
 ## What is loaded
 
-- **Always:** `index.md`, every bundled skill's `SKILL.md` (`core/`, `openmc-authoring/`, `openmc-execution/`,
+- **Always:** `index.md`, every bundled skill's `SKILL.md` (`core/`, `openmc-authoring/`, `openmc-validation/`, `openmc-execution/`,
   `openmc-post-processing/`, `general-tools/`, `reactors/triga/`) and `ERKB.yaml`. AutoMC is designed for a 128k-token context, so
   skills are not trimmed; a smaller context is a manual setting, not a supported target.
 - **On demand:** every other file under `src/skills` (rule files, templates, the working examples), read with SkillLookupTool

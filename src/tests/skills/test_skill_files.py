@@ -19,7 +19,7 @@ EXAMPLES = SKILLS / "working_examples"
 HAVE_OPENMC = importlib.util.find_spec("openmc") is not None
 _OPENMC_NAME = re.compile(r"`(openmc(?:\.[A-Za-z_]\w*)+)")
 _EXAMPLE = re.compile(r"working_examples/([a-z0-9][a-z0-9-]*)")
-_RULE = re.compile(r"\brules/([a-z0-9-]+\.md)")
+_RULE = re.compile(r"\b(?:([a-z0-9-]+)/)?rules/([a-z0-9-]+\.md)")      # rules/x.md in the same skill, or skill/rules/x.md
 # internal planning documents and their labels: devops/ is never published, so a published file must not send its reader there
 _PLAN_LABEL = re.compile(r"devops/|ERKB_LESSONS|\b(?:decisions?|Block \d+) [A-Z]{1,2}\d+\b|\b(?:AU|WD|GT|PR|MS|SF)-\d\b")
 
@@ -62,7 +62,7 @@ class SkillFiles(unittest.TestCase):
                 self.assertRegex(head[1], r"(?m)^description: \S")
 
     def test_every_rule_file_has_a_title_and_says_what_it_was_derived_from(self):
-        self.assertGreaterEqual(len(rule_files()), 18)
+        self.assertGreaterEqual(len(rule_files()), 22)                    # authoring 18, validation 4
         for p in rule_files():
             with self.subTest(rule=p.relative_to(SKILLS).as_posix()):
                 lines = p.read_text(encoding="utf-8").splitlines()
@@ -74,10 +74,10 @@ class SkillFiles(unittest.TestCase):
             for name in set(_EXAMPLE.findall(text)) - {"index"}:
                 with self.subTest(file=p.relative_to(SKILLS).as_posix(), example=name):
                     self.assertTrue((EXAMPLES / name).is_dir() or (EXAMPLES / f"{name}.md").is_file())
-            skill = p.relative_to(SKILLS).parts[0]
-            for rule in set(_RULE.findall(text)):
-                with self.subTest(file=p.relative_to(SKILLS).as_posix(), rule=rule):
-                    self.assertTrue((SKILLS / skill / "rules" / rule).is_file())
+            here = p.relative_to(SKILLS).parts[0]
+            for skill, rule in set(_RULE.findall(text)):
+                with self.subTest(file=p.relative_to(SKILLS).as_posix(), rule=f"{skill or here}/rules/{rule}"):
+                    self.assertTrue((SKILLS / (skill or here) / "rules" / rule).is_file())
 
     def test_the_skills_and_the_prompt_name_no_planning_document_or_label(self):
         """What the model reads and the repository publishes stands on its own: no devops/ path, no decision or phase label
