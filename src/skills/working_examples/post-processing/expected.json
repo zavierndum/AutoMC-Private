@@ -1,0 +1,50 @@
+{
+  "example": "post-processing",
+  "derived_from": "OpenMC notebook 'Post Processing' (openmc-notebooks v0.15.0)",
+  "reference_runs": {
+    "date": "2026-11-02",
+    "openmc": "0.15.3",
+    "data": "ENDF/B-VIII.0 (HDF5)",
+    "size": "reference",
+    "threads": 4,
+    "seconds": {
+      "default": 104.2
+    }
+  },
+  "variants": [
+    {
+      "name": "default",
+      "options": {
+        "mesh": 100,
+        "size": "quick"
+      },
+      "transport": true,
+      "checks": [
+        {
+          "result": "source_in_pellet",
+          "equals": true,
+          "why": "fission neutrons are born in the fuel only"
+        },
+        {
+          "result": "fission_cells_over_touching",
+          "min": 0.98,
+          "max": 1.0,
+          "why": "fission only in mesh cells that overlap the pellet"
+        },
+        {
+          "result": "source_mean_energy_MeV",
+          "min": 1.8,
+          "max": 2.2,
+          "why": "the mean of U-235's fission spectrum, about 2 MeV"
+        },
+        {
+          "result": "keff",
+          "expect": 1.0377266474646876,
+          "sigma": 0.0006913818638047749,
+          "n_sigma": 4,
+          "why": "the reference run here"
+        }
+      ]
+    }
+  ]
+}

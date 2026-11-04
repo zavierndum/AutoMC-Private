@@ -1,0 +1,61 @@
+{
+  "example": "slab-fluence",
+  "derived_from": "the AutoMC developers' toy problem (a beam through water and concrete)",
+  "reference_runs": {
+    "date": "2026-11-01",
+    "openmc": "0.15.3",
+    "data": "ENDF/B-VIII.0 (HDF5)",
+    "size": "reference",
+    "threads": 4,
+    "seconds": {
+      "default": 40.3
+    }
+  },
+  "variants": [
+    {
+      "name": "default",
+      "options": {
+        "water_cm": 10.0,
+        "concrete_cm": 20.0,
+        "energy_MeV": 2.0,
+        "bins": 20,
+        "size": "quick"
+      },
+      "transport": true,
+      "checks": [
+        {
+          "result": "first_bin",
+          "expect": 3.6607164517500594,
+          "sigma": 0.003439663487327608,
+          "n_sigma": 4,
+          "why": "the reference run here"
+        },
+        {
+          "result": "total_track_length",
+          "expect": 66.96196030747977,
+          "sigma": 0.020752943104051475,
+          "n_sigma": 4,
+          "why": "the reference run here"
+        },
+        {
+          "result": "last_bin",
+          "expect": 0.45891351137313674,
+          "sigma": 0.001073615608893184,
+          "n_sigma": 4,
+          "why": "the reference run here"
+        },
+        {
+          "result": "fast_falls_through_concrete",
+          "equals": true,
+          "why": "fast neutrons can only be removed in the concrete"
+        },
+        {
+          "result": "fast_relaxation_cm",
+          "expect": 8.458722321674863,
+          "rel": 0.06,
+          "why": "the reference run here (8.46 cm per e-fold)"
+        }
+      ]
+    }
+  ]
+}

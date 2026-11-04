@@ -1,0 +1,35 @@
+import openmc
+
+from coreforge.openmc_builder.builder import Builder
+from coreforge.openmc_builder.openmc_builder import register_builder, build
+from coreforge import geometry_elements
+
+@register_builder(geometry_elements.HexLattice)
+class HexLattice(Builder[geometry_elements.HexLattice]):
+    """ An OpenMC geometry builder class for HexLattice
+    """
+
+    def __init__(self):
+        pass
+
+    def build(self, element: geometry_elements.HexLattice) -> openmc.Universe:
+        outer_universe = openmc.Universe(cells=[openmc.Cell(fill=element.outer_material.openmc_material)])
+
+        universes = []
+        for ring in element.elements:
+            universes.append([])
+            for entry in ring:
+                universe = build(entry) if entry else outer_universe
+                universes[-1].append(universe)
+
+        hex_lattice             = openmc.HexLattice()
+        hex_lattice.orientation = element.orientation
+        hex_lattice.outer       = outer_universe
+        hex_lattice.pitch       = [element.pitch]
+        hex_lattice.center      = (0., 0.)
+        hex_lattice.universes   = universes
+
+        lattice_cell = openmc.Cell(fill=hex_lattice)
+        lattice_universe = openmc.Universe(cells=[lattice_cell])
+
+        return lattice_universe

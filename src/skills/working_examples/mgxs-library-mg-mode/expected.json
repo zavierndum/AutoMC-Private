@@ -1,0 +1,37 @@
+{
+  "example": "mgxs-library-mg-mode",
+  "derived_from": "OpenMC notebooks 'MGXS Part III: Libraries', 'Multigroup Mode Part II' and 'MDGXS Part II' (openmc-notebooks v0.15.0)",
+  "reference_runs": {
+    "date": "2026-11-02",
+    "openmc": "0.15.3",
+    "data": "ENDF/B-VIII.0 (HDF5)",
+    "size": "reference",
+    "threads": 4,
+    "seconds": {
+      "default": 127.7
+    }
+  },
+  "variants": [
+    {
+      "name": "default",
+      "options": {
+        "legendre_order": 3,
+        "size": "quick"
+      },
+      "transport": true,
+      "script": "run.py",
+      "checks": [
+        {
+          "result": "energy_groups",
+          "equals": 2
+        },
+        {
+          "result": "bias_pcm",
+          "min": -600.0,
+          "max": 600.0,
+          "why": "two-group data per material reproduce the CE k to a few hundred pcm"
+        }
+      ]
+    }
+  ]
+}

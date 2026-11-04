@@ -1,0 +1,41 @@
+{
+  "example": "mgxs-intro",
+  "derived_from": "OpenMC notebook 'MGXS Part I: Introduction' (openmc-notebooks v0.15.0)",
+  "reference_runs": {
+    "date": "2026-11-02",
+    "openmc": "0.15.3",
+    "data": "ENDF/B-VIII.0 (HDF5)",
+    "size": "reference",
+    "threads": 4,
+    "seconds": {
+      "default": 67.2
+    }
+  },
+  "variants": [
+    {
+      "name": "default",
+      "options": {
+        "size": "quick"
+      },
+      "transport": true,
+      "checks": [
+        {
+          "result": "sum_rule_worst",
+          "max": 1e-09,
+          "why": "total = absorption + scattering, from the same tracks"
+        },
+        {
+          "result": "thermal_over_fast_absorption",
+          "min": 1.0,
+          "why": "absorption grows as neutrons slow (1/v)"
+        },
+        {
+          "result": "k_one_group_minus_keff_sigma",
+          "min": -4.0,
+          "max": 4.0,
+          "why": "in an infinite medium k is nu-fission over absorption"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,56 @@
+# Presets of the public NETL pack. A preset is a complete spec dictionary: it is the only place default values live. A preset is never
+# edited after it has been used: a change is a new version (@2), never an edit of @1.
+
+netl_public_fresh_fuel@1:
+  description: >-
+    NETL TRIGA from public sources only: the pinned library's defaults (which cite the SAR) with fresh fuel, the 90 cm pool, no
+    barite region and no detector cells; rods fully inserted. Not the operating core: its fuel is burnt, so this model's k-eff and
+    worths differ from the facility's. For methods, examples and code comparisons.
+  spec:
+    spec_version: 1
+    facility: netl
+    name: null
+    # Numbered configurations come from a pack that has a configuration table; with this pack alone, give pnt and three_el.
+    config: null
+    pnt: none
+    three_el: none
+    rods: {transient: 0.0, regulating: 0.0, shim_1: 0.0, shim_2: 0.0}     # library default: fully inserted (A18)
+    inserts: {pnt: null, three_el: null, three_el_empty_state: water}      # with no 3-EL its slots are water, as in the library (A16)
+    # Which hardware each label means (A7, A12 to A15), from the SAR and the library's insert designs. resolve() copies the entry for
+    # the chosen label into "inserts", where every field can be overridden.
+    insert_labels:
+      pnt:
+        thermal: {terminus: unlined, cadmium_wrapper: false}
+        epithermal: {terminus: cadmium_lined, cadmium_wrapper: false}
+      three_el:
+        thermal: {design: conventional, liner: lead, liner_thickness_cm: 0.1016, modified_geometry: null}
+        epithermal: {design: conventional, liner: cadmium, liner_thickness_cm: 0.1016, modified_geometry: null}
+        fast: {design: modified, liner: null, liner_thickness_cm: null, modified_geometry: detailed}
+    conditions:
+      fuel_temperature_K: 293.6          # library default
+      non_fuel_temperature_K: 293.6      # library default
+      water_temperature_K: 293.6         # library default
+      water_density_gcc: 1.0             # library default; "auto" follows the water temperature (A6)
+      temperature_method: auto
+    fuel:
+      source: fresh                      # the library's fresh fuel (A17)
+      force_mapped_locations: false      # no fuel map in this pack
+    environment:
+      pool_radius_cm: 90.0               # library default, SAR p. 54
+      beam_port_length_factor: 2.0       # library default: each port is one pool diameter long
+      beam_port_1_5_length_cm: null      # the same length as the other ports
+      world_radius_cm: null              # the world cylinder exists only with the barite region, which this pack does not have
+      world_height_cm: null
+      barite: false
+      barite_composition_basis: null
+      detector_geometry: false
+    tallies: []
+    tallies_options:
+      library_default_tallies: true      # the generic tallies the library's problem-5 builder adds
+      energy_bins: energy_bins_238
+      polar_bins: 90                     # used only by angle-binned tallies
+      azimuthal_bins: 90
+      mesh: stock_pool_90cm              # 150 x 150 x 3 over the 90 cm pool
+      max_total_bins: 20000000           # refuse tallies above this many bins in total; raise it on purpose
+    nuclear_data: {library: endfb-viii.0}
+    run: {size: smoke, particles: null, batches: null, inactive: null, seed: null, threads: null}

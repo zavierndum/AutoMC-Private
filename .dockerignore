@@ -1,0 +1,12 @@
+# Only these reach the image (Dockerfile): AutoMC's code and public pack, the library snapshots, the pinned requirements, the
+# changelog. Never devops/, workspace/, downloads/ (nuclear data is mounted), keys, or anything restricted (it lives outside AutoMC).
+*
+!src/
+!library_snapshots/
+!docker/requirements.txt
+!CHANGELOG.md
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/*.env
+**/.env*

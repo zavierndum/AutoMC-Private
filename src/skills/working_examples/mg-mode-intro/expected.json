@@ -1,0 +1,88 @@
+{
+  "example": "mg-mode-intro",
+  "derived_from": "OpenMC notebook 'Multigroup Mode Part I' (openmc-notebooks v0.15.0); the C5G7 benchmark's data, geometry and reference solution (OECD/NEA, NEA/NSC/DOC(2003)16)",
+  "reference_runs": {
+    "date": "2026-11-02",
+    "openmc": "0.15.3",
+    "data": "multigroup (the C5G7 benchmark's seven-group data)",
+    "size": "reference",
+    "threads": 4,
+    "seconds": {
+      "infinite": 185.3,
+      "pincell": 80.1,
+      "core": 220.5
+    }
+  },
+  "variants": [
+    {
+      "name": "infinite",
+      "options": {
+        "layout": "infinite",
+        "size": "quick"
+      },
+      "transport": true,
+      "checks": [
+        {
+          "result": "k_minus_exact_sigma",
+          "min": -4.0,
+          "max": 4.0,
+          "why": "an infinite medium: the seven-group balance equations give k exactly"
+        }
+      ]
+    },
+    {
+      "name": "pincell",
+      "options": {
+        "layout": "pincell",
+        "size": "quick"
+      },
+      "transport": true,
+      "checks": [
+        {
+          "result": "fuel_over_moderator_thermal_flux",
+          "max": 1.0,
+          "why": "per volume, the fuel's thermal flux is below the moderator's: the fuel absorbs the thermal neutrons the moderator makes"
+        }
+      ]
+    },
+    {
+      "name": "core",
+      "options": {
+        "layout": "core",
+        "size": "quick"
+      },
+      "transport": true,
+      "checks": [
+        {
+          "result": "k_minus_reference_sigma",
+          "min": -4.0,
+          "max": 4.0,
+          "why": "the same data and geometry as the benchmark's multigroup MCNP reference, so only statistics separate them"
+        },
+        {
+          "result": "assembly_worst_rel_diff",
+          "max": 0.03,
+          "why": "each assembly's power within 3% of the reference at the quick size (a misplaced assembly or pin map is far off)"
+        },
+        {
+          "result": "mox_symmetry_rel_diff",
+          "min": -0.03,
+          "max": 0.03,
+          "why": "the two MOX assemblies mirror each other across the core's diagonal"
+        },
+        {
+          "result": "max_pin",
+          "min": 2.4,
+          "max": 2.75,
+          "why": "the reference's highest pin is 2.498; at the quick size each pin has about 2% noise, so the highest of 1,056 sits a few standard deviations above it"
+        },
+        {
+          "result": "min_pin",
+          "min": 0.2,
+          "max": 0.27,
+          "why": "the reference's lowest pin is 0.232"
+        }
+      ]
+    }
+  ]
+}

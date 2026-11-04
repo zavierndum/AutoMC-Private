@@ -1,0 +1,79 @@
+{
+  "example": "candu",
+  "derived_from": "OpenMC notebook 'Modeling a CANDU Bundle' (openmc-notebooks v0.15.0)",
+  "reference_runs": {
+    "date": "2026-11-01",
+    "openmc": "0.15.3",
+    "data": "ENDF/B-VIII.0 (HDF5)",
+    "size": "reference",
+    "threads": 4,
+    "seconds": {
+      "lattice": 109.6,
+      "channel": 19.6
+    }
+  },
+  "variants": [
+    {
+      "name": "lattice",
+      "options": {
+        "layout": "lattice",
+        "size": "quick"
+      },
+      "transport": true,
+      "checks": [
+        {
+          "result": "keff",
+          "expect": 1.1569626322254298,
+          "sigma": 0.00040729521599594727,
+          "n_sigma": 4,
+          "why": "the reference run here"
+        },
+        {
+          "result": "pins",
+          "equals": 37
+        },
+        {
+          "result": "worst_pin_spread_sigma",
+          "max": 4.5,
+          "why": "the pins of one ring see the same flux (symmetry)"
+        },
+        {
+          "result": "flux_rises_outward",
+          "equals": true,
+          "why": "the moderator outside the bundle feeds thermal neutrons in from the outside"
+        }
+      ]
+    },
+    {
+      "name": "channel",
+      "options": {
+        "layout": "channel",
+        "size": "quick"
+      },
+      "transport": true,
+      "checks": [
+        {
+          "result": "keff",
+          "expect": 0.056169635058531675,
+          "sigma": 3.6772660618250614e-05,
+          "n_sigma": 4,
+          "why": "the reference run here"
+        },
+        {
+          "result": "pins",
+          "equals": 37
+        },
+        {
+          "result": "worst_pin_spread_sigma",
+          "max": 4.5,
+          "why": "symmetry"
+        },
+        {
+          "result": "flux_rises_outward",
+          "equals": false,
+          "why": "with vacuum around the channel, neutrons leak from the outside and the flux peaks at the centre"
+        }
+      ]
+    }
+  ]
+}

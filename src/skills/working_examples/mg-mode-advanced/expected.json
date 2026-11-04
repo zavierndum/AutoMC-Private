@@ -1,0 +1,36 @@
+{
+  "example": "mg-mode-advanced",
+  "derived_from": "OpenMC notebook 'Multigroup Mode Part III: Advanced Feature Showcase' (openmc-notebooks v0.15.0)",
+  "reference_runs": {
+    "date": "2026-11-02",
+    "openmc": "0.15.3",
+    "data": "ENDF/B-VIII.0 (HDF5)",
+    "size": "reference",
+    "threads": 4,
+    "seconds": {
+      "default": 116.7
+    }
+  },
+  "variants": [
+    {
+      "name": "default",
+      "options": {
+        "size": "quick"
+      },
+      "transport": true,
+      "script": "run.py",
+      "checks": [
+        {
+          "result": "angle_reduces_bias",
+          "equals": true,
+          "why": "next to the blade the flux is far from isotropic, so angle-dependent data do better"
+        },
+        {
+          "result": "isotropic_bias_pcm",
+          "max": -300.0,
+          "why": "isotropic mesh data underestimate k here (the notebook: -1,318 pcm)"
+        }
+      ]
+    }
+  ]
+}

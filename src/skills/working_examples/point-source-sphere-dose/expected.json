@@ -1,0 +1,38 @@
+{
+  "example": "point-source-sphere-dose",
+  "derived_from": "the AutoMC developers' toy problem (a point source in water) and a user's question of 2026-11-01",
+  "reference_runs": {"date": "2026-11-01", "openmc": "0.15.3", "data": "ENDF/B-VIII.0 (HDF5)", "size": "reference", "threads": 4,
+                     "seconds": {"offset-void": 7.0, "offset-water": 6.0, "centre-water": 25.0}},
+  "variants": [
+    {
+      "name": "offset-void",
+      "options": {"layout": "offset", "fill": "void", "energy": "watt", "size": "quick"},
+      "transport": true,
+      "checks": [
+        {"result": "track_length", "expect": 0.023278303985161175, "n_sigma": 4,
+         "why": "exact: the chord through a 2.5 cm sphere 15 cm from an isotropic point source, averaged over directions (the reference run: 0.023223 +/- 0.000104, -0.53 sigma)"}
+      ]
+    },
+    {
+      "name": "offset-water",
+      "options": {"layout": "offset", "fill": "water", "energy": "watt", "size": "quick"},
+      "transport": true,
+      "checks": [
+        {"result": "track_length", "expect": 0.024027606958590554, "sigma": 0.00011699988353204392, "n_sigma": 4,
+         "why": "the reference run here"},
+        {"result": "dose_rate_uSv_per_h", "expect": 37726.19449460907, "sigma": 157.6858591971101, "n_sigma": 4,
+         "why": "the reference run here, a 1e8 n/s Watt source"}
+      ]
+    },
+    {
+      "name": "centre-water",
+      "options": {"layout": "centre", "fill": "water", "energy": "watt", "size": "quick"},
+      "transport": true,
+      "checks": [
+        {"result": "track_length", "expect": 72.03032731388282, "sigma": 0.04575901013809139, "n_sigma": 4, "why": "the reference run here"},
+        {"result": "dose_rate_uSv_per_h", "expect": 2617.309143784544, "sigma": 3.234190445057684, "n_sigma": 4,
+         "why": "the reference run here, a 1e8 n/s Watt source"}
+      ]
+    }
+  ]
+}

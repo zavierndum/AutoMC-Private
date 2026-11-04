@@ -1,0 +1,47 @@
+{
+  "example": "mgxs-advanced",
+  "derived_from": "OpenMC notebook 'MGXS Part II: Advanced Features' (openmc-notebooks v0.15.0)",
+  "reference_runs": {
+    "date": "2026-11-02",
+    "openmc": "0.15.3",
+    "data": "ENDF/B-VIII.0 (HDF5)",
+    "size": "reference",
+    "threads": 4,
+    "seconds": {
+      "default": 64.4
+    }
+  },
+  "variants": [
+    {
+      "name": "default",
+      "options": {
+        "size": "quick"
+      },
+      "transport": true,
+      "checks": [
+        {
+          "result": "macro_rule_worst",
+          "max": 1e-09,
+          "why": "macroscopic = sum of density x microscopic"
+        },
+        {
+          "result": "condense_rule_worst",
+          "max": 1e-09,
+          "why": "condensing bins the same events into wider groups"
+        },
+        {
+          "result": "chi_sum",
+          "expect": 1.0,
+          "rel": 1e-09,
+          "why": "chi is a normalized spectrum"
+        },
+        {
+          "result": "water_upscatter_share",
+          "min": 0.0,
+          "max": 0.2,
+          "why": "thermal neutrons in water gain energy now and then"
+        }
+      ]
+    }
+  ]
+}

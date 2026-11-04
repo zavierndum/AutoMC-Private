@@ -1,0 +1,834 @@
+from __future__ import annotations
+
+from collections.abc import Sequence
+from dataclasses import dataclass, field
+from typing import List, Optional, TypedDict, Union
+from math import isclose
+
+from mpactpy.utils import (
+    equal_volume_ring_radii,
+    relative_round,
+    ROUNDING_RELATIVE_TOLERANCE as TOL,
+)
+
+from coreforge.geometry_elements.triga.core_element import CoreElement
+from coreforge.geometry_elements.cylindrical_pincell import CylindricalPinCell
+from coreforge.geometry_elements.cylindrical_stack import CylindricalStack
+from coreforge.geometry_elements.stack import Stack
+from coreforge.geometry_elements.triga.end_fitting import EndFitting as BaseEndFitting
+from coreforge.materials import Air, Graphite, Material, Mo, SS304, UZrH, Water, Zr, unique_materials
+from coreforge.utils import TolerantEqualityMixin
+
+
+# pylint: disable=too-many-public-methods
+class FuelElement(CoreElement):
+    """TRIGA fuel element definitions and pincell builder.
+
+    Parameters
+    ----------
+    cladding : FuelElement.Cladding
+        Cladding definition with thickness, outer radius, and material.
+    fill_gas : Optional[Material]
+        Gas filling any radial gaps (between Zr rod and fuel meat, or meat and cladding).
+        Defaults to ``Air``.
+    outer_material : Optional[Material]
+        Exterior/coolant material surrounding the cladding.
+        Defaults to ``Water``.
+    upper_end_fitting : FuelElement.EndFitting
+        Upper end fitting geometry and material (cone approximation).
+    upper_air_gap : FuelElement.AirGap
+        Axial air gap above the upper graphite reflector.
+    upper_graphite_reflector : FuelElement.GraphiteReflector
+        Upper graphite reflector geometry and material.
+    zr_fill_rod : FuelElement.ZrFillRod
+        Zirconium fill rod geometry and material.
+    fuel_meat : FuelElement.FuelMeat
+        Fuel meat geometry (inner/outer radii, length) and material.
+    moly_disc : FuelElement.MolyDisc
+        Molybdenum disc geometry and material.
+    lower_graphite_reflector : FuelElement.GraphiteReflector
+        Lower graphite reflector geometry and material.
+    lower_end_fitting : FuelElement.EndFitting
+        Lower end fitting geometry and material (cone approximation).
+    gap_tolerance : float, optional
+        Minimum thickness to retain a radial gap; thinner gaps are removed. Defaults to 1e-8.
+
+
+    Attributes
+    ----------
+    cladding : FuelElement.Cladding
+        Cladding specification.
+    fill_gas : Material
+        Gas filling any radial gaps.
+    outer_material : Material
+        Exterior/coolant material.
+    upper_end_fitting : FuelElement.EndFitting
+        Upper end fitting specification.
+    upper_air_gap : FuelElement.AirGap
+        Axial air gap above the upper graphite reflector.
+    upper_graphite_reflector : FuelElement.GraphiteReflector
+        Upper graphite reflector specification.
+    zr_fill_rod : FuelElement.ZrFillRod
+        Zirconium fill rod specification.
+    fuel_meat : FuelElement.FuelMeat
+        Fuel meat specification.
+    moly_disc : FuelElement.MolyDisc
+        Molybdenum disc specification.
+    lower_graphite_reflector : FuelElement.GraphiteReflector
+        Lower graphite reflector specification.
+    lower_end_fitting : FuelElement.EndFitting
+        Lower end fitting specification.
+    interior_length : float
+        Axial length from the bottom of the lower graphite reflector to the top
+        of the upper air gap.
+    length : float
+        Total axial length including upper and lower end fittings.
+    gap_tolerance : float, optional
+        Minimum thickness to retain a radial gap (defaults to 1e-8).
+    pincell : FuelElement.Pincell
+        Pincells keyed by axial feature.
+    References
+    ----------
+    .. [1] D. R. Redhouse, et al., "Radiation Characterization Summary: NETL Beam Port
+           1/5 Free-Field Environment at the 128-inch Core Centerline Adjacent Location,
+           (NETL-FF-BP1/5-128-cca).", Nov. 2022. https://doi.org/10.2172/1898256
+    """
+
+    @dataclass(frozen=True, eq=False)
+    class ZrFillRod(TolerantEqualityMixin):
+        """Zirconium fill rod specification.
+
+        Attributes
+        ----------
+        radius : float
+            Radius of the Zr fill rod [cm].
+        material : Material
+            Rod material (defaults to ``Zr``).
+        """
+        radius: float
+        material: Material = field(default_factory=Zr)
+
+        def __post_init__(self) -> None:
+            assert self.radius > 0.0, "Zr Fill Rod radius must be positive."
+
+    class FuelMeat:
+        """Fuel meat specification.
+
+        Attributes
+        ----------
+        inner_radius : float
+            Inner radius of the fuel meat [cm].
+        outer_radius : float
+            Outer radius of the fuel meat [cm].
+        length : float
+            Axial length of the fuel meat [cm].
+        material : Material or Sequence[Material]
+            User-facing fuel material specification for this fuel meat. Pass a
+            single ``Material`` for homogeneous fuel meat, or pass one material
+            per region for regioned fuel meat. Regioned material sequences use
+            axial-major order: top-to-bottom axial levels, with radial regions
+            ordered inner-to-outer within each axial level. The ``material``
+            property is a convenience/compatibility view; it returns the single
+            material for one-region fuel meat and a copy of the region list for
+            multi-region fuel meat.
+        num_radial_regions : int
+            Number of equal-volume radial fuel material regions. Defaults to 1.
+        num_axial_regions : int
+            Number of equal-length axial fuel material regions. Defaults to 1.
+        material_regions : List[Material]
+            Normalized material-region list in axial-major order. Use this in
+            geometry builders, meshing code, and any logic that needs explicit
+            per-region materials; its length is always
+            ``num_axial_regions * num_radial_regions``.
+        """
+
+        @property
+        def inner_radius(self) -> float:
+            return self._inner_radius
+
+        @property
+        def outer_radius(self) -> float:
+            return self._outer_radius
+
+        @property
+        def length(self) -> float:
+            return self._length
+
+        @property
+        def material(self) -> Union[Material, List[Material]]:
+            if len(self._material_regions) == 1:
+                return self._material_regions[0]
+            return list(self._material_regions)
+
+        @property
+        def material_regions(self) -> List[Material]:
+            return list(self._material_regions)
+
+        @property
+        def num_radial_regions(self) -> int:
+            return self._num_radial_regions
+
+        @property
+        def num_axial_regions(self) -> int:
+            return self._num_axial_regions
+
+        def __init__(self,
+                     inner_radius: float,
+                     outer_radius: float,
+                     length: float,
+                     material: Optional[Union[Material, Sequence[Material]]] = None,
+                     num_radial_regions: int = 1,
+                     num_axial_regions: int = 1):
+            assert inner_radius > 0.0, "Fuel Meat inner radius must be positive."
+            assert outer_radius > inner_radius, "Fuel Meat outer radius must exceed inner radius."
+            assert length > 0.0, "Fuel Meat length must be positive."
+            assert num_radial_regions > 0, "Fuel Meat num_radial_regions must be positive."
+            assert num_axial_regions > 0, "Fuel Meat num_axial_regions must be positive."
+
+            self._inner_radius       = inner_radius
+            self._outer_radius       = outer_radius
+            self._length             = length
+            self._num_radial_regions = num_radial_regions
+            self._num_axial_regions  = num_axial_regions
+
+            material = material if material is not None else UZrH()
+            num_material_regions = num_axial_regions * num_radial_regions
+            if isinstance(material, Material):
+                material = [material for _ in range(num_material_regions)]
+            else:
+                assert len(material) == num_material_regions, (
+                    f"Fuel Meat material sequence length must equal "
+                    f"num_axial_regions * num_radial_regions ({num_material_regions}); "
+                    f"got {len(material)}."
+                )
+            self._material_regions = list(material)
+
+        def __eq__(self, other: object) -> bool:
+            if self is other:
+                return True
+            return (isinstance(other, FuelElement.FuelMeat) and
+                    isclose(self.inner_radius, other.inner_radius, rel_tol=TOL) and
+                    isclose(self.outer_radius, other.outer_radius, rel_tol=TOL) and
+                    isclose(self.length, other.length, rel_tol=TOL) and
+                    self.num_radial_regions == other.num_radial_regions and
+                    self.num_axial_regions == other.num_axial_regions and
+                    self._material_regions == other._material_regions)
+
+        def __hash__(self) -> int:
+            return hash((relative_round(self.inner_radius, TOL),
+                         relative_round(self.outer_radius, TOL),
+                         relative_round(self.length, TOL),
+                         self.num_radial_regions,
+                         self.num_axial_regions,
+                         tuple(self._material_regions)))
+
+    @dataclass(frozen=True, eq=False)
+    class Cladding(TolerantEqualityMixin):
+        """Cladding specification.
+
+        Attributes
+        ----------
+        thickness : float
+            Cladding thickness [cm].
+        outer_radius : float
+            Cladding outer radius [cm].
+        inner_radius : float
+            Derived inner radius (outer minus thickness) [cm].
+        material : Material
+            Cladding material (defaults to ``SS304``).
+        """
+        thickness: float
+        outer_radius: float
+        inner_radius: float = field(init=False)
+        material: Material = field(default_factory=SS304)
+
+        def __post_init__(self) -> None:
+            assert self.thickness > 0.0, "Cladding thickness must be positive."
+            assert self.outer_radius > self.thickness, (
+                "Cladding outer radius must exceed thickness."
+            )
+            object.__setattr__(self, "inner_radius", self.outer_radius - self.thickness)
+
+    @dataclass(frozen=True, eq=False)
+    class GraphiteReflector(TolerantEqualityMixin):
+        """Graphite reflector specification.
+
+        Attributes
+        ----------
+        radius : float
+            Reflector radius [cm].
+        thickness : float
+            Axial thickness of the reflector [cm].
+        material : Material
+            Reflector material Defaults to ``Graphite`` at 1.6 g/cc (Ref. [1]_ pg. 50).
+        """
+        radius: float
+        thickness: float
+        material: Material = field(default_factory=lambda: Graphite(graphite_density=1.6))
+
+        def __post_init__(self) -> None:
+            assert self.radius > 0.0, "Graphite Reflector radius must be positive."
+            assert self.thickness > 0.0, "Graphite Reflector thickness must be positive."
+
+    @dataclass(frozen=True, eq=False)
+    class MolyDisc(TolerantEqualityMixin):
+        """Molybdenum disc specification.
+
+        Attributes
+        ----------
+        radius : float
+            Disc radius [cm].
+        thickness : float
+            Disc thickness [cm].
+        material : Material
+            Disc material (defaults to ``Mo``).
+        """
+        radius: float
+        thickness: float
+        material: Material = field(default_factory=Mo)
+
+        def __post_init__(self) -> None:
+            assert self.radius > 0.0, "Moly Disc radius must be positive."
+            assert self.thickness > 0.0, "Moly Disc thickness must be positive."
+
+    @dataclass(frozen=True, eq=False)
+    class AirGap(TolerantEqualityMixin):
+        """Axial air gap specification above the upper reflector.
+
+        Attributes
+        ----------
+        thickness : float
+            Gap thickness [cm].
+        """
+        thickness: float
+
+        def __post_init__(self) -> None:
+            assert self.thickness > 0.0, "Air Gap thickness must be positive."
+
+    @dataclass(frozen=True, eq=False)
+    class EndFitting(BaseEndFitting):
+        """Fuel element end fitting specification.
+
+        The fitting is represented as a conical taper that can be converted to
+        a stack of volume-preserving cylindrical segments. When the fitting is
+        clipped by the fuel element cladding radius, the full-radius cylindrical
+        portion is modeled exactly and only the remaining taper is approximated.
+
+        Parameters
+        ----------
+        length : float
+            Cone length from base to apex [cm].
+        r2 : float
+            Square of the cone slope ``(dr/dz)^2``.
+        direction : {'up', 'down'}
+            Orientation of the fitting in a bottom-to-top stack.
+        material : Material
+            Fitting material. Defaults to ``SS304``.
+        """
+        material: Material = field(default_factory=SS304)
+
+    class Pincell(TypedDict):
+        """Pincells used to construct the fuel-element axial stack."""
+
+        fuel: List[CylindricalPinCell]
+        moly_disc: CylindricalPinCell
+        upper_reflector: CylindricalPinCell
+        lower_reflector: CylindricalPinCell
+        air_gap: CylindricalPinCell
+
+    @property
+    def cladding(self) -> Cladding:
+        return self._cladding
+
+    @property
+    def fill_gas(self) -> Material:
+        return self._fill_gas
+
+    @property
+    def outer_material(self) -> Material:
+        return self._outer_material
+
+    @property
+    def gap_tolerance(self) -> Optional[float]:
+        return self._gap_tolerance
+
+    @property
+    def upper_end_fitting(self) -> EndFitting:
+        return self._upper_end_fitting
+
+    @property
+    def upper_air_gap(self) -> AirGap:
+        return self._upper_air_gap
+
+    @property
+    def upper_graphite_reflector(self) -> GraphiteReflector:
+        return self._upper_graphite_reflector
+
+    @property
+    def zr_fill_rod(self) -> ZrFillRod:
+        return self._zr_fill_rod
+
+    @property
+    def fuel_meat(self) -> FuelMeat:
+        return self._fuel_meat
+
+    @property
+    def moly_disc(self) -> MolyDisc:
+        return self._moly_disc
+
+    @property
+    def lower_graphite_reflector(self) -> GraphiteReflector:
+        return self._lower_graphite_reflector
+
+    @property
+    def lower_end_fitting(self) -> EndFitting:
+        return self._lower_end_fitting
+
+    @property
+    def interior_length(self) -> float:
+        return self._interior_length
+
+    @property
+    def length(self) -> float:
+        return self._length
+
+    @property
+    def pincell(self) -> Pincell:
+        pincell = self._pincell.copy()
+        pincell["fuel"] = list(self._pincell["fuel"])
+        return pincell
+
+
+    def __init__(self,
+                cladding:                 Cladding,
+                upper_end_fitting:        EndFitting,
+                upper_air_gap:            AirGap,
+                upper_graphite_reflector: GraphiteReflector,
+                zr_fill_rod:              ZrFillRod,
+                fuel_meat:                FuelMeat,
+                moly_disc:                MolyDisc,
+                lower_graphite_reflector: GraphiteReflector,
+                lower_end_fitting:        EndFitting,
+                gap_tolerance:            Optional[float] = 1.0e-8,
+                fill_gas:                 Optional[Material] = None,
+                outer_material:           Optional[Material] = None,
+                name:                     str = "fuel_element"):
+        super().__init__(name)
+        self._cladding                 = cladding
+        self._fill_gas                 = fill_gas or Air()
+        self._outer_material           = outer_material or Water()
+        self._gap_tolerance            = gap_tolerance
+        self._upper_end_fitting        = upper_end_fitting
+        self._upper_air_gap            = upper_air_gap
+        self._upper_graphite_reflector = upper_graphite_reflector
+        self._zr_fill_rod              = zr_fill_rod
+        self._fuel_meat                = fuel_meat
+        self._moly_disc                = moly_disc
+        self._lower_graphite_reflector = lower_graphite_reflector
+        self._lower_end_fitting        = lower_end_fitting
+
+        self._interior_length = (self._lower_graphite_reflector.thickness
+                                 + self._moly_disc.thickness
+                                 + self._fuel_meat.length
+                                 + self._upper_graphite_reflector.thickness
+                                 + self._upper_air_gap.thickness)
+        self._length = (self._interior_length
+                        + self._upper_end_fitting.length
+                        + self._lower_end_fitting.length)
+
+        fuel_pincells = self.build_fuel_meat_pincells(
+            cladding       = self.cladding,
+            fuel_meat      = self.fuel_meat,
+            zr_fill_rod    = self.zr_fill_rod,
+            fill_gas       = self.fill_gas,
+            outer_material = self.outer_material,
+            gap_tolerance  = self.gap_tolerance,
+            name           = self.name + "_fuel_meat_pincell",
+        )
+        moly_disc_pincell = self.build_moly_disc_pincell(
+            cladding       = self.cladding,
+            moly_disc      = self.moly_disc,
+            fill_gas       = self.fill_gas,
+            outer_material = self.outer_material,
+            gap_tolerance  = self.gap_tolerance,
+            name           = self.name + "_moly_disc_pincell",
+        )
+        upper_reflector_pincell = self.build_graphite_reflector_pincell(
+            cladding       = self.cladding,
+            reflector      = self.upper_graphite_reflector,
+            fill_gas       = self.fill_gas,
+            outer_material = self.outer_material,
+            gap_tolerance  = self.gap_tolerance,
+            name           = self.name + "_upper_graphite_reflector_pincell",
+        )
+        lower_reflector_pincell = self.build_graphite_reflector_pincell(
+            cladding       = self.cladding,
+            reflector      = self.lower_graphite_reflector,
+            fill_gas       = self.fill_gas,
+            outer_material = self.outer_material,
+            gap_tolerance  = self.gap_tolerance,
+            name           = self.name + "_lower_graphite_reflector_pincell",
+        )
+        air_gap_pincell = self.build_air_gap_pincell(
+            cladding       = self.cladding,
+            fill_gas       = self.fill_gas,
+            outer_material = self.outer_material,
+            gap_tolerance  = self.gap_tolerance,
+            name           = self.name + "_air_gap_pincell",
+        )
+        self._pincell: FuelElement.Pincell = {
+            "fuel": fuel_pincells,
+            "moly_disc": moly_disc_pincell,
+            "upper_reflector": upper_reflector_pincell,
+            "lower_reflector": lower_reflector_pincell,
+            "air_gap": air_gap_pincell,
+        }
+
+    def __eq__(self, other: object) -> bool:
+        if self is other:
+            return True
+        if not isinstance(other, FuelElement):
+            return False
+        return (
+            self.cladding == other.cladding and
+            self.fill_gas == other.fill_gas and
+            self.outer_material == other.outer_material and
+            self.upper_end_fitting == other.upper_end_fitting and
+            self.upper_air_gap == other.upper_air_gap and
+            self.upper_graphite_reflector == other.upper_graphite_reflector and
+            self.zr_fill_rod == other.zr_fill_rod and
+            self.fuel_meat == other.fuel_meat and
+            self.moly_disc == other.moly_disc and
+            self.lower_graphite_reflector == other.lower_graphite_reflector and
+            self.lower_end_fitting == other.lower_end_fitting and
+            ((self.gap_tolerance is None and other.gap_tolerance is None) or
+             (self.gap_tolerance is not None and other.gap_tolerance is not None and
+              isclose(self.gap_tolerance, other.gap_tolerance, rel_tol=TOL)))
+        )
+
+    def __hash__(self) -> int:
+        return hash((
+            self.cladding,
+            self.fill_gas,
+            self.outer_material,
+            self.upper_end_fitting,
+            self.upper_air_gap,
+            self.upper_graphite_reflector,
+            self.zr_fill_rod,
+            self.fuel_meat,
+            self.moly_disc,
+            self.lower_graphite_reflector,
+            self.lower_end_fitting,
+            None if self.gap_tolerance is None else relative_round(self.gap_tolerance, TOL),
+        ))
+
+    def get_materials(self) -> List[Material]:
+        materials = [
+            self.cladding.material,
+            self.fill_gas,
+            self.outer_material,
+            self.upper_end_fitting.material,
+            self.upper_graphite_reflector.material,
+            self.zr_fill_rod.material,
+            *self.fuel_meat.material_regions,
+            self.moly_disc.material,
+            self.lower_graphite_reflector.material,
+            self.lower_end_fitting.material,
+        ]
+        return unique_materials(materials)
+
+    def as_stack(
+        self,
+        bottom_pos: float = 0.0,
+        lower_end_target_axial_thickness: Optional[float] = None,
+        upper_end_target_axial_thickness: Optional[float] = None,
+    ) -> CylindricalStack:
+        """ A method for getting a copy of the Fuel Element as a Stack
+
+        Parameters
+        ----------
+        bottom_pos : float
+            The axial position of the bottom of the stack (cm)
+        lower_end_target_axial_thickness : Optional[float]
+            Target axial thickness for lower end fitting segments.
+        upper_end_target_axial_thickness : Optional[float]
+            Target axial thickness for upper end fitting segments.
+
+        Returns
+        -------
+        CylindricalStack
+            The Fuel Element as a Stack
+        """
+        lower_end_stack = self.lower_end_fitting.as_stack(
+            outer_material          = self.outer_material,
+            bottom_pos              = bottom_pos,
+            target_axial_thickness  = lower_end_target_axial_thickness,
+            max_radius              = self.cladding.outer_radius,
+            name                    = self.name + "_lower_end_fitting",
+        )
+
+        upper_end_stack = self.upper_end_fitting.as_stack(
+            outer_material          = self.outer_material,
+            target_axial_thickness  = upper_end_target_axial_thickness,
+            max_radius              = self.cladding.outer_radius,
+            name                    = self.name + "_upper_end_fitting",
+        )
+
+        pincell = self.pincell
+        fuel_region_thickness = self.fuel_meat.length / self.fuel_meat.num_axial_regions
+        fuel_segments         = [Stack.Segment(fuel_pincell, fuel_region_thickness)
+                                 for fuel_pincell in reversed(pincell["fuel"])]
+
+        mid_stack = CylindricalStack(segments=[
+            Stack.Segment(pincell["lower_reflector"], self.lower_graphite_reflector.thickness),
+            Stack.Segment(pincell["moly_disc"], self.moly_disc.thickness),
+            *fuel_segments,
+            Stack.Segment(pincell["upper_reflector"], self.upper_graphite_reflector.thickness),
+            Stack.Segment(pincell["air_gap"], self.upper_air_gap.thickness),
+        ])
+
+        stack = lower_end_stack + mid_stack + upper_end_stack
+        stack.name = self.name
+
+        return stack
+
+    @staticmethod
+    def build_fuel_meat_pincell(cladding:       Cladding,
+                                fuel_meat:      FuelMeat,
+                                zr_fill_rod:    ZrFillRod,
+                                fill_gas:       Optional[Material] = None,
+                                outer_material: Optional[Material] = None,
+                                gap_tolerance:  float = 1.0e-8,
+                                name:           str = "fuel_meat_pincell",
+                                axial_level:    int = 0) -> CylindricalPinCell:
+        """Build a pincell for the fuel meat region.
+
+        Parameters
+        ----------
+        cladding : FuelElement.Cladding
+            Cladding definition with thickness, outer radius, and material.
+        fuel_meat : FuelElement.FuelMeat
+            Fuel meat definition with inner/outer radii and material.
+        zr_fill_rod : FuelElement.ZrFillRod
+            Zirconium fill rod definition.
+        fill_gas : Material, optional
+            Gap fill material; defaults to ``Air``.
+        outer_material : Material, optional
+            Exterior/coolant material; defaults to ``Water``.
+        gap_tolerance : float, optional
+            Minimum thickness to retain a zone; thinner zones are removed. Defaults to 1e-8.
+        name : str, optional
+            Name for the pincell.
+        axial_level : int, optional
+            Fuel meat axial level to build, indexed from top to bottom. Defaults to 0.
+
+        Returns
+        -------
+        CylindricalPinCell
+            Concentric pincell representing the fuel meat region.
+        """
+        fill_gas = fill_gas or Air()
+        outer_material = outer_material or Water()
+
+        assert zr_fill_rod.radius <= fuel_meat.inner_radius, (
+            "Zr fill rod must fit inside fuel meat inner radius.")
+        assert fuel_meat.outer_radius <= cladding.inner_radius, (
+            "Fuel meat must fit inside cladding.")
+        assert 0 <= axial_level < fuel_meat.num_axial_regions, (
+            f"axial_level = {axial_level}, "
+            f"fuel_meat.num_axial_regions = {fuel_meat.num_axial_regions}"
+        )
+
+        fuel_radii = equal_volume_ring_radii(
+            inner_radius = fuel_meat.inner_radius,
+            outer_radius = fuel_meat.outer_radius,
+            num_div      = fuel_meat.num_radial_regions,
+        )
+        material_start = axial_level * fuel_meat.num_radial_regions
+        material_stop  = material_start + fuel_meat.num_radial_regions
+        fuel_materials = fuel_meat.material_regions[material_start:material_stop]
+
+        radii = [zr_fill_rod.radius,
+                 fuel_meat.inner_radius,
+                 *fuel_radii,
+                 cladding.inner_radius,
+                 cladding.outer_radius]
+
+        materials = [zr_fill_rod.material,
+                     fill_gas,
+                     *fuel_materials,
+                     fill_gas,
+                     cladding.material,
+                     outer_material]
+
+        return CylindricalPinCell(radii=radii, materials=materials, name=name,
+                                  min_zone_thickness=gap_tolerance)
+
+
+    @staticmethod
+    def build_fuel_meat_pincells(cladding:       Cladding,
+                                 fuel_meat:      FuelMeat,
+                                 zr_fill_rod:    ZrFillRod,
+                                 fill_gas:       Optional[Material] = None,
+                                 outer_material: Optional[Material] = None,
+                                 gap_tolerance:  float = 1.0e-8,
+                                 name:           str = "fuel_meat_pincell") -> List[CylindricalPinCell]:
+        """Build fuel meat pincells for each axial material level.
+
+        Parameters
+        ----------
+        cladding : FuelElement.Cladding
+            Cladding definition with thickness, outer radius, and material.
+        fuel_meat : FuelElement.FuelMeat
+            Fuel meat definition with inner/outer radii, region counts, and
+            material region specification.
+        zr_fill_rod : FuelElement.ZrFillRod
+            Zirconium fill rod definition.
+        fill_gas : Material, optional
+            Gap fill material; defaults to ``Air``.
+        outer_material : Material, optional
+            Exterior/coolant material; defaults to ``Water``.
+        gap_tolerance : float, optional
+            Minimum thickness to retain a zone; thinner zones are removed. Defaults to 1e-8.
+        name : str, optional
+            Base name for the pincells. For multiple axial regions, the axial
+            level index is appended to this name.
+
+        Returns
+        -------
+        List[CylindricalPinCell]
+            Fuel meat pincells ordered from top to bottom, matching
+            ``FuelMeat.material_regions`` axial-major ordering.
+        """
+        pincells = []
+        for axial_level in range(fuel_meat.num_axial_regions):
+            pincell_name = name
+            if fuel_meat.num_axial_regions > 1:
+                pincell_name = f"{name}_axial_{axial_level}"
+            pincells.append(FuelElement.build_fuel_meat_pincell(cladding       = cladding,
+                                                                fuel_meat      = fuel_meat,
+                                                                zr_fill_rod    = zr_fill_rod,
+                                                                fill_gas       = fill_gas,
+                                                                outer_material = outer_material,
+                                                                gap_tolerance  = gap_tolerance,
+                                                                name           = pincell_name,
+                                                                axial_level    = axial_level))
+        return pincells
+
+
+    @staticmethod
+    def build_moly_disc_pincell(cladding:       Cladding,
+                                moly_disc:      MolyDisc,
+                                fill_gas:       Optional[Material] = None,
+                                outer_material: Optional[Material] = None,
+                                gap_tolerance:  float = 1.0e-8,
+                                name:           str = "moly_disc_pincell") -> CylindricalPinCell:
+        """Build a pincell for the molybdenum disc region.
+
+        Parameters
+        ----------
+        cladding : FuelElement.Cladding
+            Cladding definition with thickness, outer radius, and material.
+        moly_disc : FuelElement.MolyDisc
+            Molybdenum disc definition (radius, material).
+        fill_gas : Material, optional
+            Gap fill material; defaults to ``Air``.
+        outer_material : Material, optional
+            Exterior/coolant material; defaults to ``Water``.
+        gap_tolerance : float, optional
+            Minimum thickness to retain a zone; thinner zones are removed. Defaults to 1e-8.
+        name : str, optional
+            Name for the pincell.
+
+        Returns
+        -------
+        CylindricalPinCell
+            Concentric pincell representing the molybdenum disc region.
+        """
+        fill_gas = fill_gas or Air()
+        outer_material = outer_material or Water()
+
+        assert moly_disc.radius <= cladding.inner_radius, "Moly disc must fit inside cladding."
+
+        radii     = [moly_disc.radius,   cladding.inner_radius, cladding.outer_radius]
+        materials = [moly_disc.material, fill_gas,              cladding.material, outer_material]
+
+        return CylindricalPinCell(radii=radii, materials=materials, name=name,
+                                  min_zone_thickness=gap_tolerance)
+
+
+    @staticmethod
+    def build_graphite_reflector_pincell(cladding:       Cladding,
+                                         reflector:      GraphiteReflector,
+                                         fill_gas:       Optional[Material] = None,
+                                         outer_material: Optional[Material] = None,
+                                         gap_tolerance:  float = 1.0e-8,
+                                         name:           Optional[str] = "graphite_reflector_pincell") -> CylindricalPinCell:
+        """Build a pincell for the graphite reflector region.
+
+        Parameters
+        ----------
+        cladding : FuelElement.Cladding
+            Cladding definition with thickness, outer radius, and material.
+        reflector : FuelElement.GraphiteReflector
+            Graphite reflector definition (radius, material).
+        fill_gas : Material, optional
+            Gap fill material; defaults to ``Air``.
+        outer_material : Material, optional
+            Exterior/coolant material; defaults to ``Water``.
+        gap_tolerance : float, optional
+            Minimum thickness to retain a zone; thinner zones are removed. Defaults to 1e-8.
+        name : str, optional
+            Name for the pincell.
+
+        Returns
+        -------
+        CylindricalPinCell
+            Concentric pincell representing the reflector region.
+        """
+        fill_gas = fill_gas or Air()
+        outer_material = outer_material or Water()
+
+        assert reflector.radius <= cladding.inner_radius, "Reflector must fit inside cladding."
+
+        radii     = [reflector.radius,   cladding.inner_radius, cladding.outer_radius]
+        materials = [reflector.material, fill_gas,              cladding.material, outer_material]
+
+        return CylindricalPinCell(radii=radii, materials=materials, name=name,
+                                  min_zone_thickness=gap_tolerance)
+
+
+    @staticmethod
+    def build_air_gap_pincell(cladding:       Cladding,
+                              fill_gas:       Optional[Material] = None,
+                              outer_material: Optional[Material] = None,
+                              gap_tolerance:  float = 1.0e-8,
+                              name:           str = "air_gap_pincell") -> CylindricalPinCell:
+        """Build a pincell for the air gap region (uses fill_gas for core).
+
+        Parameters
+        ----------
+        cladding : FuelElement.Cladding
+            Cladding definition with thickness, outer radius, and material.
+        fill_gas : Material, optional
+            Gap fill material; defaults to ``Air``.
+        outer_material : Material, optional
+            Exterior/coolant material; defaults to ``Water``.
+        gap_tolerance : float, optional
+            Minimum thickness to retain a zone; thinner zones are removed. Defaults to 1e-8.
+        name : str, optional
+            Name for the pincell.
+
+        Returns
+        -------
+        CylindricalPinCell
+            Concentric pincell representing the air-gap region.
+        """
+        fill_gas = fill_gas or Air()
+        outer_material = outer_material or Water()
+
+        radii     = [cladding.inner_radius, cladding.outer_radius]
+        materials = [fill_gas,              cladding.material, outer_material]
+
+        return CylindricalPinCell(radii=radii, materials=materials, name=name,
+                                  min_zone_thickness=gap_tolerance)

@@ -1,0 +1,312 @@
+from __future__ import annotations
+
+from math import sqrt
+from typing import ClassVar, Dict, List, Tuple, TypeAlias
+
+from coreforge.geometry_elements import CylindricalStack, GeometryElement, HexLattice
+from coreforge.materials import Material, unique_materials
+from coreforge.geometry_elements.triga import CoreElement, FuelElement, GraphiteElement
+from coreforge.geometry_elements.triga.netl.central_thimble import CentralThimble
+from coreforge.geometry_elements.triga.netl.fuel_follower_control_rod import FuelFollowerControlRod
+from coreforge.geometry_elements.triga.netl.modified_three_element_irradiator import \
+    ModifiedThreeElementIrradiator
+from coreforge.geometry_elements.triga.netl.pnt import PNT
+from coreforge.geometry_elements.triga.netl.source_holder import SourceHolder
+from coreforge.geometry_elements.triga.netl.three_element_irradiator import ThreeElementIrradiator
+from coreforge.geometry_elements.triga.netl.transient_rod import TransientRod
+
+
+class Core(GeometryElement):
+    """TRIGA NETL core layout and reserved locations.
+
+    Parameters
+    ----------
+    pitch : float
+        Hexagonal lattice pitch [cm].
+    central_thimble : CentralThimble
+        Central thimble inserted at location A-01.
+    transient_rod : TransientRod
+        Transient control rod placed at C-01.
+    regulating_rod : FuelFollowerControlRod
+        Regulating rod placed at C-07.
+    shim_1_rod : FuelFollowerControlRod
+        Shim 1 rod placed at D-06.
+    shim_2_rod : FuelFollowerControlRod
+        Shim 2 rod placed at D-14.
+    fill_material : Material
+        Material to fill unoccupied core locations.
+    loading : Dict[str, Loadable | None]
+        Map of mutable locations to their contents; keys must be in ``RING_MAP``
+        and not in the reserved locations (A-01, C-01, C-07, D-06, D-14,
+        G-01, G-07, G-13, G-19, G-25, G-31). Any unspecified, non-reserved
+        locations are set to ``None``. Supported contents are fuel elements,
+        graphite elements, source holders, PNTs, three-element irradiators,
+        and cylindrical stacks.
+    three_element_irradiator : Loadable, optional
+        Loadable spanning locations E-11, F-13, and F-14. When provided, those
+        locations are conditionally reserved and must not contain another
+        nonempty entry in ``loading``.
+    name : str, optional
+        Name for this core element.
+
+    Attributes
+    ----------
+    pitch : float
+        Hexagonal lattice pitch [cm].
+    central_thimble : CentralThimble
+        Central thimble inserted at location A-01.
+    transient_rod : TransientRod
+        Transient control rod placed at C-01.
+    regulating_rod : FuelFollowerControlRod
+        Regulating rod placed at C-07.
+    shim_1_rod : FuelFollowerControlRod
+        Shim 1 rod placed at D-06.
+    shim_2_rod : FuelFollowerControlRod
+        Shim 2 rod placed at D-14.
+    fill_material : Material
+        Material to fill unoccupied core locations.
+    loading : Dict[str, Loadable | None]
+        Map of mutable locations to their contents
+    three_element_irradiator : Loadable, optional
+        Loadable spanning the three conditionally reserved irradiation-facility
+        locations.
+    three_element_offsets : Dict[str, Tuple[float, float]]
+        Facility-center coordinates relative to the center of each three-element
+        lattice location [cm].
+    full_map : Dict[str, Element | None]
+        Full map of core locations to their contents.
+    lattice : HexLattice
+        CoreForge Hexagonal lattice representing the full core.
+
+    Notes
+    -----
+    Reserved locations follow Ref. [1]_ Fig. 4.4 & pg. 4-9: C-01 (Transient),
+    C-07 (Regulating), D-06 (Shim 1), D-14 (Shim 2), A-01 (Central thimble),
+    and G-01/07/13/19/25/31 (water holes).
+
+    References
+    ----------
+    .. [1] "University of Texas at Austin Nuclear Engineering Teaching Laboratory
+           TRIGA Research Reactor", August 2023,
+           https://www.nrc.gov/docs/ML2327/ML23279A146.pdf
+    """
+
+    RING_MAP: ClassVar[List[List[str]]] = [
+        ["G-01", "G-02", "G-03", "G-04", "G-05", "G-06",
+         "G-07", "G-08", "G-09", "G-10", "G-11", "G-12",
+         "G-13", "G-14", "G-15", "G-16", "G-17", "G-18",
+         "G-19", "G-20", "G-21", "G-22", "G-23", "G-24",
+         "G-25", "G-26", "G-27", "G-28", "G-29", "G-30",
+         "G-31", "G-32", "G-33", "G-34", "G-35", "G-36"],
+        ["F-01", "F-02", "F-03", "F-04", "F-05", "F-06",
+         "F-07", "F-08", "F-09", "F-10", "F-11", "F-12",
+         "F-13", "F-14", "F-15", "F-16", "F-17", "F-18",
+         "F-19", "F-20", "F-21", "F-22", "F-23", "F-24",
+         "F-25", "F-26", "F-27", "F-28", "F-29", "F-30"],
+        ["E-01", "E-02", "E-03", "E-04", "E-05", "E-06",
+         "E-07", "E-08", "E-09", "E-10", "E-11", "E-12",
+         "E-13", "E-14", "E-15", "E-16", "E-17", "E-18",
+         "E-19", "E-20", "E-21", "E-22", "E-23", "E-24"],
+        ["D-01", "D-02", "D-03", "D-04", "D-05", "D-06",
+         "D-07", "D-08", "D-09", "D-10", "D-11", "D-12",
+         "D-13", "D-14", "D-15", "D-16", "D-17", "D-18"],
+        ["C-01", "C-02", "C-03", "C-04", "C-05", "C-06",
+         "C-07", "C-08", "C-09", "C-10", "C-11", "C-12"],
+        ["B-01", "B-02", "B-03", "B-04", "B-05", "B-06"],
+        ["A-01"]
+    ]
+
+    Loadable:   TypeAlias = FuelElement | GraphiteElement | SourceHolder | PNT | ThreeElementIrradiator | \
+                            ModifiedThreeElementIrradiator | CylindricalStack
+    ControlRod: TypeAlias = TransientRod | FuelFollowerControlRod
+    Fixture:    TypeAlias = CentralThimble | TransientRod | FuelFollowerControlRod
+    Element:    TypeAlias = CoreElement | CylindricalStack
+
+    THREE_ELEMENT_LOCATIONS: ClassVar[List[str]] = ["E-11", "F-13", "F-14"]
+    RESERVED_LOCATIONS: ClassVar[List[str]] = ["A-01", "C-01", "C-07", "D-06", "D-14",
+                                               "G-01", "G-07", "G-13", "G-19", "G-25", "G-31"]
+
+    @property
+    def pitch(self) -> float:
+        return self._pitch
+
+    @property
+    def central_thimble(self) -> CentralThimble:
+        return self._central_thimble
+
+    @property
+    def transient_rod(self) -> TransientRod:
+        return self._transient_rod
+
+    @property
+    def regulating_rod(self) -> FuelFollowerControlRod:
+        return self._regulating_rod
+
+    @property
+    def shim_1_rod(self) -> FuelFollowerControlRod:
+        return self._shim_1_rod
+
+    @property
+    def shim_2_rod(self) -> FuelFollowerControlRod:
+        return self._shim_2_rod
+
+    @property
+    def fill_material(self) -> Material:
+        return self._fill_material
+
+    @property
+    def loading(self) -> Dict[str, Loadable | None]:
+        return self._loading
+
+    @property
+    def three_element_irradiator(self) -> Loadable | None:
+        return self._three_element_irradiator
+
+    @property
+    def three_element_offsets(self) -> Dict[str, Tuple[float, float]]:
+        return self._three_element_offsets
+
+    @property
+    def full_map(self) -> Dict[str, Element | None]:
+        return self._full_map
+
+    @property
+    def lattice(self) -> HexLattice:
+        return self._lattice
+
+    def __init__(self,
+                 pitch:           float,
+                 central_thimble: CentralThimble,
+                 transient_rod:   TransientRod,
+                 regulating_rod:  FuelFollowerControlRod,
+                 shim_1_rod:      FuelFollowerControlRod,
+                 shim_2_rod:      FuelFollowerControlRod,
+                 fill_material:   Material,
+                 loading:         Dict[str, Loadable | None],
+                 three_element_irradiator: Loadable | None = None,
+                 name:            str = "core") -> None:
+        super().__init__(name)
+        assert pitch > 0.0, "Core pitch must be positive."
+        self._pitch           = pitch
+        self._three_element_offsets = self._calculate_three_element_offsets()
+        self._central_thimble = central_thimble
+        self._transient_rod   = transient_rod
+        self._regulating_rod  = regulating_rod
+        self._shim_1_rod      = shim_1_rod
+        self._shim_2_rod      = shim_2_rod
+        self._fill_material   = fill_material
+        self._loading          = dict(loading)
+        self._three_element_irradiator = three_element_irradiator
+
+        for location in self._loading:
+            assert any(location in ring for ring in Core.RING_MAP), \
+                f"Invalid core location '{location}' in core loading."
+            assert location not in Core.RESERVED_LOCATIONS, \
+                f"Core location '{location}' is reserved for control rods or central thimble."
+
+        if self.three_element_irradiator is not None:
+            conflicting_locations = [
+                location
+                for location in Core.THREE_ELEMENT_LOCATIONS
+                if self.loading.get(location) is not None
+            ]
+            assert not conflicting_locations, (
+                "Three-element irradiator locations must be empty in core loading: "
+                f"{conflicting_locations}."
+            )
+
+        reserved = {
+            "A-01": self.central_thimble,
+            "C-01": self.transient_rod,
+            "C-07": self.regulating_rod,
+            "D-06": self.shim_1_rod,
+            "D-14": self.shim_2_rod,
+            "G-01": None,
+            "G-07": None,
+            "G-13": None,
+            "G-19": None,
+            "G-25": None,
+            "G-31": None,
+        }
+
+        full_map: Dict[str, Core.Element | None] = {}
+        for ring in Core.RING_MAP:
+            for loc in ring:
+                if self.three_element_irradiator is not None and loc in Core.THREE_ELEMENT_LOCATIONS:
+                    full_map[loc] = self.three_element_irradiator
+                elif loc in reserved:
+                    full_map[loc] = reserved[loc]
+                else:
+                    full_map[loc] = self._loading.get(loc, None)
+        self._full_map = full_map
+
+        self._lattice = HexLattice(pitch          = self.pitch,
+                                   outer_material = self.fill_material,
+                                   orientation    = "y",
+                                   elements       = [[full_map[loc] for loc in ring]
+                                                     for ring in Core.RING_MAP],
+                                   map_type="ring")
+
+    def __eq__(self, other: object) -> bool:
+        if self is other:
+            return True
+        return (
+            isinstance(other, Core)
+            and self.pitch == other.pitch
+            and self.central_thimble == other.central_thimble
+            and self.transient_rod == other.transient_rod
+            and self.regulating_rod == other.regulating_rod
+            and self.shim_1_rod == other.shim_1_rod
+            and self.shim_2_rod == other.shim_2_rod
+            and self.loading == other.loading
+            and self.three_element_irradiator == other.three_element_irradiator
+            and self.fill_material == other.fill_material
+        )
+
+    def __hash__(self) -> int:
+        return hash((
+            self.pitch,
+            self.central_thimble,
+            self.transient_rod,
+            self.regulating_rod,
+            self.shim_1_rod,
+            self.shim_2_rod,
+            tuple(sorted(self.loading.items())),
+            self.three_element_irradiator,
+            self.fill_material,
+        ))
+
+    def get_materials(self) -> List[Material]:
+        materials = [self.fill_material]
+        for element in self.full_map.values():
+            if element is not None:
+                materials.extend(element.get_materials())
+        return unique_materials(materials)
+
+
+    def _calculate_three_element_offsets(self) -> Dict[str, Tuple[float, float]]:
+        """Calculate the three-element irradiator offsets from the lattice map.
+
+        Returns
+        -------
+        Dict[str, Tuple[float, float]]
+            Mapping from each three-element lattice location to its local
+            facility-center offset [cm].
+        """
+
+        R = self.pitch
+        r = 0.5 * sqrt(3.0) * R
+
+        # Centers are relative to the core center in Cartesian coordinates.
+        location_centers = {"E-11": (2.0 * r, -3.0 * R),
+                            "F-13": (3.0 * r, -3.5 * R),
+                            "F-14": (2.0 * r, -4.0 * R)}
+
+        # The 3-EL axis is located at the radial centroid of the three positions.
+        number_of_locations = len(location_centers)
+        centroid = (sum(center[0] for center in location_centers.values()) / number_of_locations,
+                    sum(center[1] for center in location_centers.values()) / number_of_locations)
+
+        # Express that common centroid in each lattice cell's local coordinates.
+        return {location: (centroid[0] - center[0], centroid[1] - center[1])
+                for location, center in location_centers.items()}

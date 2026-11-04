@@ -1,0 +1,132 @@
+# Assumptions register of the public NETL pack. Every build lists the assumptions that apply to its spec, with the values the spec
+# uses for each assumption's fields. An id means the same topic in every NETL pack; the spec's own pack gives the wording.
+# The `applies` forms are documented in ../README.md.
+- id: A2
+  title: "Pool radius and beam-port lengths"
+  statement: >-
+    Pool radius 90 cm and every beam port one pool diameter (180 cm) long, the library defaults; the library cites SAR p. 54 for the
+    pool. The real pool and port dimensions may differ; every one is an editable field.
+  fields: ["environment.pool_radius_cm", "environment.beam_port_length_factor", "environment.beam_port_1_5_length_cm"]
+  confirm_with: "facility operations"
+  status: "library default"
+  applies: always
+- id: A4
+  title: "Library version"
+  statement: >-
+    The pinned library is CoreForge pnt_3el at dcfc111 with progression_problems 3el_spec at 1f31371 (2026-10-05), which include
+    upstream fix #38 (grid plates, 2026-06-07), plus one local fix: the graphite reflector cell excludes the core shroud (upstream the
+    two overlap, found with openmc -g).
+  fields: []
+  confirm_with: "library maintainers"
+  status: "pinned; the reflector fix is not upstream yet"
+  applies: always
+- id: A5
+  title: "Console units map linearly to rod travel"
+  statement: >-
+    fraction = console / 960, the builder's console scale. Only matters when rods are given in console units. The scale is not yet
+    traced to a public document.
+  fields: []
+  confirm_with: "control-system owner"
+  status: "source to be documented"
+  applies: always
+- id: A6
+  title: "Fuel and water conditions"
+  statement: >-
+    Fuel, structures and water at 293.6 K and water at 1.0 g/cm3, the library defaults. The steam-table density at 293.6 K is 0.9980
+    g/cm3; setting conditions.water_density_gcc to "auto" follows the water temperature.
+  fields: ["conditions.fuel_temperature_K", "conditions.non_fuel_temperature_K", "conditions.water_temperature_K", "conditions.water_density_gcc"]
+  confirm_with: "facility operations"
+  status: "library default"
+  applies: always
+- id: A7
+  title: "PNT hardware for the thermal and epithermal labels"
+  statement: >-
+    Thermal PNT = unlined terminus; epithermal PNT = cadmium-lined terminus, without the cadmium wrapper. Hypothesis, supported by the
+    SAR: at 100 kW the terminal with cadmium sees a thermal flux of 1.8e9 against 7.8e11 without, with about the same epithermal flux
+    (SAR p166), and the cadmium-lined PNT is worth -$0.30, the bare one negligible (SAR p92). Whether the epithermal PNT also uses the
+    wrapper is open.
+  fields: ["pnt", "inserts.pnt"]
+  confirm_with: "facility operations"
+  status: "hypothesis, supported by the SAR"
+  applies: {pnt: {not: none}}
+- id: A8
+  title: "Effective delayed neutron fraction"
+  statement: >-
+    Needed to convert k-eff differences to dollars when comparing insert worths. Proposed: 0.0070, the value of the SAR's dollar
+    limits. The SAR's computed values are 0.0071 (2018 core) and 0.00735 (limiting core).
+  fields: []
+  confirm_with: "control-system owner"
+  status: "proposed 0.0070, not confirmed"
+  applies: {any: [{pnt: {not: none}}, {three_el: {not: none}}]}
+- id: A11
+  title: "Tally definitions"
+  statement: >-
+    A tally preset is a definition only (flux_mesh: the neutron flux on a regular mesh, by default 150 x 150 x 3 over the 90 cm pool).
+    No tally has been compared with a measurement.
+  fields: ["tallies", "tallies_options.mesh"]
+  confirm_with: "not needed (a definition)"
+  status: "definition, unverified"
+  applies: {tallies: {not_empty: true}}
+- id: A12
+  title: "Epithermal 3-EL is the cadmium-lined canister"
+  statement: >-
+    The epithermal 3-EL is the conventional three-element canister with a cadmium liner. The SAR: the cadmium-lined facility is used
+    for epithermal activation up to 500 kW (p172).
+  fields: ["inserts.three_el"]
+  confirm_with: "facility operations"
+  status: "supported by the SAR"
+  applies: {three_el: epithermal}
+- id: A13
+  title: "Thermal 3-EL is the lead-lined canister"
+  statement: >-
+    The thermal 3-EL is built as the conventional canister with a lead liner. Candidate: the SAR says the lead-lined canister is used
+    for thermal neutron irradiation up to full power (p172), and the canister is ballasted with lead or cadmium (p169).
+  fields: ["inserts.three_el"]
+  confirm_with: "facility operations"
+  status: "candidate, supported by the SAR"
+  applies: {three_el: thermal}
+- id: A14
+  title: "Liner thickness of the conventional 3-EL"
+  statement: >-
+    The liner keeps the library's shape: 0.1016 cm (40 mil) thick, 118.1 cm long. For cadmium this is the library value, and the SAR
+    describes the liner as wrapped twice over about 118.7 cm (p169). For lead the thickness is not known; the cadmium value is used.
+  fields: ["inserts.three_el"]
+  confirm_with: "facility operations"
+  status: "library value; lead thickness unknown"
+  applies: {inserts.three_el.liner: {in: [cadmium, lead]}}
+- id: A15
+  title: "Fast 3-EL is the modified 3-EL"
+  statement: >-
+    The fast 3-EL is built as the modified three-element irradiator (natural B4C and enriched boron canisters, cadmium sleeve, silver
+    and cadmium disks), detailed geometry. Hypothesis: the SAR has no counterpart for it.
+  fields: ["inserts.three_el"]
+  confirm_with: "facility operations"
+  status: "hypothesis"
+  applies: {three_el: fast}
+- id: A16
+  title: "The 3-EL slots when no 3-EL is loaded"
+  statement: >-
+    With no 3-EL, E-11, F-13 and F-14 are water, as in the library. Whether an empty canister stays in place is open; an unlined
+    canister is worth about +$0.16 by MCNP (SAR p171). Installing the facility means removing three fuel elements (SAR p170).
+  fields: ["inserts.three_el_empty_state"]
+  confirm_with: "facility operations"
+  status: "open"
+  applies: {three_el: none}
+- id: A17
+  title: "Fresh fuel"
+  statement: >-
+    Every fuel element is fresh, as the library builds it by default. The real core's fuel is burnt, so k-eff, the power shape and
+    insert worths differ from the facility's. Use fresh-fuel models for methods, examples and comparisons between codes, not as
+    predictions for the facility.
+  fields: ["fuel.source"]
+  confirm_with: "not needed (a modelling choice)"
+  status: "modelling choice"
+  applies: {fuel.source: fresh}
+- id: A18
+  title: "Rods fully inserted"
+  statement: >-
+    All four rods are fully inserted, the library default. Set rods (in any unit) for any other state.
+  fields: ["rods"]
+  confirm_with: "not needed (a modelling choice)"
+  status: "library default"
+  applies: {rods.transient: 0.0, rods.regulating: 0.0, rods.shim_1: 0.0, rods.shim_2: 0.0}

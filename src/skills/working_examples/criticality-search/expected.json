@@ -1,0 +1,57 @@
+{
+  "example": "criticality-search",
+  "derived_from": "OpenMC notebook 'Criticality Search' (openmc-notebooks v0.15.0)",
+  "reference_runs": {
+    "date": "2026-11-02",
+    "openmc": "0.15.3",
+    "data": "ENDF/B-VIII.0 (HDF5)",
+    "size": "reference",
+    "threads": 4,
+    "seconds": {
+      "default": 286.3
+    }
+  },
+  "variants": [
+    {
+      "name": "default",
+      "options": {
+        "boron_ppm": 1000.0,
+        "bracket_ppm": [
+          500.0,
+          2500.0
+        ],
+        "tolerance": 0.01,
+        "enrichment": 1.6,
+        "size": "quick"
+      },
+      "transport": true,
+      "script": "run.py",
+      "checks": [
+        {
+          "result": "bracketed",
+          "equals": true,
+          "why": "k above 1 at the low end of the bracket, below 1 at the high end"
+        },
+        {
+          "result": "boron_worth_pcm_per_ppm",
+          "min": -15.0,
+          "max": -4.0,
+          "why": "a few pcm per ppm, negative"
+        },
+        {
+          "result": "k_nearest",
+          "expect": 1.0,
+          "n_sigma": 4,
+          "sigma": 0.0015,
+          "why": "the run nearest the answer is critical, within its error and the search's 1% tolerance (about 150 pcm)"
+        },
+        {
+          "result": "critical_ppm",
+          "expect": 1148.4375,
+          "rel": 0.03,
+          "why": "the reference run here (the search's tolerance is 1%)"
+        }
+      ]
+    }
+  ]
+}

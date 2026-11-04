@@ -1,0 +1,37 @@
+# AutoMC with Docker Compose (devops/AutoMC_Workspace_Plan.md, WD-5), modelled on AutoSAM's.
+#
+#   docker compose build                                   the image (Dockerfile; VISUAL_PARSER=no in .env or the shell for the lite one)
+#   docker compose run --rm automc chat                    a chat in the workspace /host/workspace
+#   AUTOMC_PROJECT=projectA docker compose run --rm automc chat         another project folder under /host (W1)
+#   docker compose run --rm automc run jobs                any other command: python -m automc <command>
+#
+# Mounts (W1: one /host holding your project folders; the workspace is /host/<project>):
+#   AUTOMC_HOST          your projects               -> /host (read and write; every project's .automc/ lives in it)
+#   AUTOMC_CONFIG        ~/.config/automc            -> /config, read only: keys.env (the keys file) and settings.yaml (user settings)
+#   AUTOMC_NUCLEAR_DATA  the ENDF/B-VIII.0 HDF5 data -> /data/nuclear, read only (cross_sections.xml at its top)
+# The restricted NETL pack is never in the image: at NETL add docker-compose.netl.yml (-f docker-compose.yml -f docker-compose.netl.yml).
+#
+# Ollama runs on the host and is reached at host.docker.internal:11434 (as AutoSAM reaches it); the local model is the host's. Inside
+# the container python.approval: auto may let Python run without asking (W2; settings.yaml), since the container is the sandbox.
+name: automc
+
+services:
+  automc:
+    image: ${AUTOMC_IMAGE:-automc:0.8.0}          # AUTOMC_IMAGE=automc:0.8.0-lite for the image without Visual-Parser
+    build:
+      context: .
+      args:
+        VISUAL_PARSER: ${VISUAL_PARSER:-yes}
+    stdin_open: true
+    tty: true
+    user: "${AUTOMC_UID:-1000}:${AUTOMC_GID:-1000}"
+    environment:
+      AUTOMC_WORKSPACE: /host/${AUTOMC_PROJECT:-workspace}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - "${AUTOMC_HOST:-./host}:/host"
+      - "${AUTOMC_CONFIG:-${HOME}/.config/automc}:/config:ro"
+      - "${AUTOMC_NUCLEAR_DATA:-./downloads/endfb-viii.0-hdf5}:/data/nuclear:ro"
+    # OpenMC runs and the host's Ollama share this machine: keep some cores for the model
+    cpus: ${AUTOMC_CPUS:-8}

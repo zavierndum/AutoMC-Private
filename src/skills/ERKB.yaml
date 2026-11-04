@@ -1,0 +1,95 @@
+# AutoMC error knowledge base, in AutoSAM's ERKB format. One entry per known error: detection_hint (a substring to look for in run.log
+# or an error message), signature, background, suggestion, confidence (high | medium | low), origin (seen: met in this project; source:
+# from the OpenMC source or documentation, not yet met here).
+
+- detection_hint: "No cross_sections.xml file was specified"
+  signature: "OpenMC stops at start-up: no cross_sections.xml file was specified in materials.xml or in OPENMC_CROSS_SECTIONS"
+  background: >
+    OpenMC finds its nuclear data through the OPENMC_CROSS_SECTIONS environment variable. A run started in an environment that does not
+    set it fails before batch 1. The job service refuses to start without it, so this appears only for runs started by hand.
+  suggestion: >
+    Tell the user to set OPENMC_CROSS_SECTIONS to the library's cross_sections.xml (for example export
+    OPENMC_CROSS_SECTIONS=~/endfb-viii.0-hdf5/cross_sections.xml in the WSL automc environment) and start the run again.
+  confidence: high
+  origin: seen
+
+- detection_hint: "Overlapping cells detected"
+  signature: "Geometry debug mode (openmc -g) stops with: Overlapping cells detected: <cell> (<name>), <cell> (<name>)"
+  background: >
+    Two cells claim the same space. Point queries cannot see this (they return the first matching cell), and ordinary transport may
+    run without complaint while particles are tracked in the wrong material. In this project a library cell (the graphite reflector)
+    overlapped the core shroud; the local fix changed k-eff by many times its statistical error. In a DAGMC (CAD) model, an overlap
+    with the implicit complement (the space outside every CAD volume) usually means touching volumes that were not imprinted and
+    merged: each holds its own copy of the shared face. The volumes need not cross, and check_watertight does not show it.
+  suggestion: >
+    Report both cells and their names. Do not patch the geometry silently: the fix belongs in the library or the builder, with a
+    record of its effect. Run openmc -g on the smallest model that shows it. For a CAD model whose overlap names the implicit
+    complement, say that the CAD export must imprint and merge the volumes, and point to the cad-geometry example's README
+    ("Using the tokamak").
+  confidence: high
+  origin: seen
+
+- detection_hint: "Maximum number of lost particles has been reached"
+  signature: "The run stops after too many lost particles; particle_*.h5 files appear in the run folder"
+  background: >
+    A lost particle reached a point that no cell covers (a gap in the geometry) or crossed into undefined space. The particle files
+    record where. A few lost particles stop the run only when they exceed the limit, but any lost particle means a geometry error.
+  suggestion: >
+    Report the number of lost-particle files and that the geometry has a gap. Suggest a geometry debug run (openmc -g) and a look at
+    the location in the particle file; do not raise the lost-particle limit to make the error go away.
+  confidence: medium
+  origin: source
+
+- detection_hint: "does not contain cross sections for"
+  signature: "OpenMC stops at start-up: the nuclear data library has no cross sections for a nuclide at or near a temperature"
+  background: >
+    The installed ENDF/B-VIII.0 library holds data at 250, 294, 600, 900, 1200 and 2500 K. With the temperature method "nearest", a
+    material temperature more than 10 K from the nearest one fails; a nuclide missing from the library fails at any temperature.
+  suggestion: >
+    For TRIGA builds, set conditions.temperature_method to "interpolation" (or "auto", which chooses it when needed), or use a
+    temperature near one of the library's. For a missing nuclide, report it; it needs another library.
+  confidence: medium
+  origin: source
+
+- detection_hint: "status=failed"
+  signature: "A job ends with status failed and an error line in run.log"
+  background: >
+    The worker caught an error from OpenMC or from Python and wrote it to run.log and status.json before ending. The job's error field
+    carries the last error line.
+  suggestion: >
+    Quote the error field, look for it in this knowledge base, and explain it. Starting the same case again without a change fails the
+    same way.
+  confidence: high
+  origin: seen
+
+- detection_hint: "is not built: missing"
+  signature: "A build stops with: library profile '<name>' is not built: missing <folder>"
+  background: >
+    Builds import pinned library snapshots; a profile whose snapshot folder is absent cannot build. A profile from a facility pack keeps
+    its snapshot in the pack.
+  suggestion: >
+    Tell the user the command in the message (python library_snapshots/make_snapshots.py, with --pack DIR for a pack's profile).
+  confidence: high
+  origin: seen
+
+- detection_hint: "No restricted facility pack is installed"
+  signature: "A preset, a configuration number or a fuel source needs a facility pack that is not installed"
+  background: >
+    Restricted facility data (for example the facility's reference preset or its configuration numbering) live in a pack outside
+    AutoMC, found through AUTOMC_FACILITY_PACKS. Without it only the public pack is available.
+  suggestion: >
+    Say which item is missing and offer the public alternative (the public preset; insert labels instead of a configuration number).
+    Never try to recreate restricted data.
+  confidence: high
+  origin: seen
+
+- detection_hint: "bins in total, above the limit"
+  signature: "A spec is refused because its tallies have more bins than tallies_options.max_total_bins"
+  background: >
+    Detector tallies with many energy and angle bins make statepoints of hundreds of megabytes to gigabytes. The size guard refuses
+    them above the limit (20,000,000 bins by default).
+  suggestion: >
+    Offer fewer energy bins (tallies_options.energy_bins), fewer angle bins, fewer tallies, or raising the limit on purpose, with the
+    statepoint size each would give.
+  confidence: high
+  origin: seen

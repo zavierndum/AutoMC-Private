@@ -1,0 +1,105 @@
+# Which language models the AutoMC agent can talk to. Choose one with `python -m automc chat --provider NAME` or the
+# AUTOMC_LLM_PROVIDER environment variable; the default is below. `python -m automc models list` shows which are ready, and
+# `python -m automc models check NAME` sends one short message to prove a provider answers.
+#
+# kind      local: runs on this machine; it may see restricted facility data (NETL data), because nothing leaves the machine.
+#           cloud: runs behind an API; it never sees restricted data (agent/guard.py withholds it).
+# account   whose agreement covers what is sent: self_hosted (local only), enterprise (an institution's agreement, such as UT's
+#           Portkey gateway) or personal (a user's own key). Only public data is meant for any cloud account.
+# backend   ollama (Ollama's own API), openai_compatible (any OpenAI-style endpoint: OpenAI itself, Portkey, Ollama's /v1),
+#           google_genai (Gemini through Google's own API and langchain-google-genai, as RADIANT-LLM runs it: Gemini 3 carries
+#           thought signatures between tool calls there) or anthropic (Claude's API; needs `pip install langchain-anthropic`).
+#           GPT models that take tools only through OpenAI's Responses API (gpt-5.4 and later, gpt-6) are sent there automatically.
+# max_tokens_per_session   tokens one conversation may spend on the provider; a step that would pass it is not sent. Default for
+#           a cloud provider 200,000 (about 20 agent steps with AutoMC's prompt and tools); local providers have no cap.
+# api_key_env   the NAME of the environment variable that holds the key. Keys are never written in this file.
+# model     set it before use; no model is guessed. A provider without its model, address or key is "not ready".
+# temperature   left out (null) for cloud reasoning models, some of which refuse any value but their default.
+# context_window   tokens the model can hold (num_ctx for Ollama); the agent's context guard keeps the conversation inside it.
+# discover  also offer the models this service lists, filtered (agent/discovery.py): ollama (local models with tools, vision and
+#           thinking), openai (GPT models from gpt-4 on, RADIANT-LLM's filters), gemini (Gemini models from gemini-3 on, the same).
+#           No other service is discovered. A discovered model keeps its provider's kind and account; a discovered cloud model is
+#           used only after `python -m automc models check PROVIDER/MODEL --tools` has passed once. `/model` in the chat lists them.
+default_provider: local
+
+# Switching models during a conversation (agent/llm.py, automc_core.Session.switch_model): a switch to a cloud model is refused while
+# the conversation holds restricted facility data, and needs a typed confirmation while it holds data of unknown origin. The only way
+# past the refusal is a decision made in advance by the data owners: name the provider here AND set AUTOMC_ALLOW_RESTRICTED_ON_CLOUD=1
+# in the environment. Never possible for an account: personal provider. Every turn it applies is written to the chat audit.
+policy:
+  restricted_allowed_on: []
+
+providers:
+  local:
+    kind: local
+    account: self_hosted
+    backend: ollama
+    base_url: http://127.0.0.1:11434          # the Ollama of the environment the chat runs in (WSL has its own)
+    model: qwen3.6:35b-32k-t0                 # the default since 2026-10-26; recipe: config/ollama/qwen3.6-35b-32k-t0.Modelfile
+    num_ctx: 32768                            # about 23k tokens left after the system prompt and the tool schemas; the context guard
+    temperature: 0                            # warns at 70% and shortens old tool results at 85%
+    reasoning: false                          # thinking off: on this laptop the model writes about one token per second
+    timeout_s: 1800
+    discover: ollama                          # the other Ollama models with tools, vision and thinking, each at its own num_ctx
+
+  local-128k:
+    kind: local
+    account: self_hosted
+    backend: ollama
+    base_url: http://127.0.0.1:11434
+    model: qwen3.6:35b-128k-t0                # recipe: config/ollama/qwen3.6-35b-128k-t0.Modelfile; as fast as 32k on this laptop (measured
+    num_ctx: 131072                           # 2026-10-26), four times the room
+    temperature: 0
+    reasoning: false
+    timeout_s: 1800
+
+  openai:
+    kind: cloud
+    account: personal                         # a user's own OpenAI API key; no Portkey needed
+    backend: openai_compatible
+    base_url: https://api.openai.com/v1
+    model: ""                                 # optional: a GPT model name; or choose one of the discovered ones with /model
+    api_key_env: OPENAI_API_KEY
+    timeout_s: 600
+    max_output_tokens: 4000
+    context_window: 128000                    # OpenAI's list gives no window; 128k is the floor from gpt-4o on (gpt-4 itself has 8k)
+    max_tokens_per_session: 200000
+    discover: openai
+
+  openai-portkey:
+    kind: cloud
+    account: enterprise                       # UT's Portkey gateway
+    backend: openai_compatible
+    base_url: https://api.portkey.ai/v1
+    model: ""                                 # optional, written @<provider-slug>/<model>; or choose a discovered one with /model
+    api_key_env: PORTKEY_API_KEY
+    headers:
+      User-Agent: AutoMC                      # Portkey's Cloudflare front refuses requests without a named User-Agent (error 1010)
+    timeout_s: 600
+    max_output_tokens: 4000
+    context_window: 128000
+    max_tokens_per_session: 200000
+    discover: openai                          # the GPT models of the workspace's providers (@<slug>/gpt-...); no other provider's
+
+  gemini:
+    kind: cloud
+    account: personal                         # about $30 of credit: checks and short tasks only
+    backend: google_genai                     # needs langchain-google-genai (SETUP.md 7c)
+    base_url: https://generativelanguage.googleapis.com/v1beta   # where its models are listed; the window comes from that list
+    model: ""                                 # optional: a Gemini model name; or choose a discovered one with /model
+    api_key_env: GEMINI_API_KEY
+    timeout_s: 600
+    max_output_tokens: 4000
+    max_tokens_per_session: 200000
+    discover: gemini
+
+  claude:
+    kind: cloud
+    account: personal
+    backend: anthropic
+    base_url: https://api.anthropic.com
+    model: ""                                 # set before use, a Claude model name (not discovered)
+    api_key_env: ANTHROPIC_API_KEY
+    timeout_s: 600
+    max_output_tokens: 4000
+    max_tokens_per_session: 200000

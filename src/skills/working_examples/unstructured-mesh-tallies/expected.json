@@ -1,0 +1,45 @@
+{
+  "example": "unstructured-mesh-tallies",
+  "derived_from": "OpenMC notebook 'Unstructured Mesh: Introduction' (openmc-notebooks v0.15.0)",
+  "reference_runs": {
+    "date": "2026-11-03",
+    "openmc": "0.15.3",
+    "data": "ENDF/B-VIII.0 (HDF5)",
+    "size": "reference",
+    "threads": 4,
+    "seconds": {
+      "default": 90.8
+    }
+  },
+  "variants": [
+    {
+      "name": "default",
+      "options": {
+        "size": "quick"
+      },
+      "transport": true,
+      "checks": [
+        {
+          "result": "elements_in_channels",
+          "equals": 340144,
+          "why": "every element of the mesh lies in one of the four channels"
+        },
+        {
+          "result": "worst_flux_rel_diff",
+          "max": 0.03,
+          "why": "the tets and the exact cylinder cover the same channel, so their flux per volume agrees (the tets' faceting is 1%)"
+        },
+        {
+          "result": "fuel_heating_over_tube",
+          "min": 20.0,
+          "why": "fission heats the fuel; the guide tubes hold only water"
+        },
+        {
+          "result": "vtk_written",
+          "equals": true,
+          "why": "the tally goes out to a VTK file for ParaView or VisIt"
+        }
+      ]
+    }
+  ]
+}

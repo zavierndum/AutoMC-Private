@@ -1,0 +1,89 @@
+{
+  "example": "expansion-filters",
+  "derived_from": "OpenMC notebook 'Functional Expansions' (openmc-notebooks v0.15.0)",
+  "reference_runs": {
+    "date": "2026-11-02",
+    "openmc": "0.15.3",
+    "data": "ENDF/B-VIII.0 (HDF5)",
+    "size": "reference",
+    "threads": 4,
+    "seconds": {
+      "column": 23.3,
+      "pellet": 9.1
+    }
+  },
+  "variants": [
+    {
+      "name": "column",
+      "options": {
+        "layout": "column",
+        "size": "quick"
+      },
+      "transport": true,
+      "checks": [
+        {
+          "result": "zeroth_over_sum",
+          "expect": 1.0,
+          "rel": 1e-06,
+          "why": "the zeroth moment is the integrated flux"
+        },
+        {
+          "result": "dip_at_absorber",
+          "equals": true,
+          "why": "the boron carbide slab absorbs"
+        },
+        {
+          "result": "keff",
+          "expect": 0.30267837068660475,
+          "sigma": 0.0001384597702952732,
+          "n_sigma": 4,
+          "why": "the reference run here"
+        },
+        {
+          "result": "absorber_over_beside",
+          "expect": 0.9517383557385415,
+          "rel": 0.02,
+          "why": "the reference run here"
+        },
+        {
+          "result": "rms_rel_diff",
+          "max": 0.03,
+          "why": "order 8 follows the binned shape"
+        }
+      ]
+    },
+    {
+      "name": "pellet",
+      "options": {
+        "layout": "pellet",
+        "size": "quick"
+      },
+      "transport": true,
+      "checks": [
+        {
+          "result": "zeroth_over_sum",
+          "expect": 1.0,
+          "rel": 1e-06,
+          "why": "the zeroth moment is the integrated flux"
+        },
+        {
+          "result": "centre_over_edge",
+          "min": 1.0,
+          "why": "a bare pellet: the flux falls toward its surface"
+        },
+        {
+          "result": "keff",
+          "expect": 0.011321122716098734,
+          "sigma": 5.798014277492434e-06,
+          "n_sigma": 4,
+          "why": "the reference run here"
+        },
+        {
+          "result": "rms_rel_diff",
+          "max": 0.08,
+          "why": "order 10 follows the rings (quick runs score the thin outer rings rarely)"
+        }
+      ]
+    }
+  ]
+}

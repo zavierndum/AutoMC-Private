@@ -1,0 +1,20 @@
+# AutoMC's default local model (Block 5 decision D7): qwen3.6 35B-A3B with a 128k context and temperature 0. 128k is the minimum
+# context for any local model AutoMC is designed for. Same parameters as the Control Room Agent's recipe of 2026-10-21.
+#
+# Build it once, in the Ollama that AutoMC talks to (the WSL one by default), from AutoMC/src:
+#   ollama create qwen3.6:35b-128k-t0 -f config/ollama/qwen3.6-35b-128k-t0.Modelfile
+#
+# FROM must name the base model as that Ollama has it ('ollama list'): qwen3.6:35b-a3b in the WSL Ollama, qwen3.6:35b in the
+# Windows one. A new machine: ollama pull qwen3.6:35b-a3b.
+#
+# Memory: the model is hybrid (full attention in 1 of 4 blocks, 2 KV heads of 256), so the KV cache grows by about 20 KB per token:
+# about 2.7 GB at 128k. The model and cache need about 27 GB.
+FROM qwen3.6:35b-a3b
+
+PARAMETER num_ctx 131072
+PARAMETER temperature 0
+PARAMETER top_k 20
+PARAMETER top_p 0.95
+PARAMETER min_p 0
+PARAMETER presence_penalty 1.5
+PARAMETER repeat_penalty 1

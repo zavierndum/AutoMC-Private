@@ -1,0 +1,6 @@
+# Text is stored with LF. Shell scripts and the Dockerfile keep LF in every checkout (WSL and the container run them); the
+# Windows batch file keeps CRLF.
+* text=auto
+*.sh text eol=lf
+Dockerfile text eol=lf
+*.bat text eol=crlf

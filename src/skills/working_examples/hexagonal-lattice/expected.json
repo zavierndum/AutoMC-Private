@@ -1,0 +1,6 @@
+{"example": "hexagonal-lattice", "derived_from": "OpenMC notebook 'Modeling Hexagonal Lattices' (openmc-notebooks v0.15.0)",
+ "variants": [{"name": "x-hexagon", "options": {"orientation": "x", "boundary": "hexagon", "rings": 4}, "transport": false,
+               "checks": [{"result": "positions", "equals": 37}, {"result": "large_pins", "equals": 4}, {"result": "small_pins", "equals": 33},
+                          {"result": "orientation", "equals": "x"}]},
+              {"name": "y-cylinder", "options": {"orientation": "y", "boundary": "cylinder", "rings": 4}, "transport": false,
+               "checks": [{"result": "positions", "equals": 37}, {"result": "orientation", "equals": "y"}]}]}

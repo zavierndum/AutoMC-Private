@@ -1,0 +1,70 @@
+{
+  "example": "delayed-neutron-data",
+  "derived_from": "OpenMC notebooks 'MDGXS Part I' and 'MDGXS Part II' (openmc-notebooks v0.15.0)",
+  "reference_runs": {
+    "date": "2026-11-02",
+    "openmc": "0.15.3",
+    "data": "ENDF/B-VIII.0 (HDF5)",
+    "size": "reference",
+    "threads": 4,
+    "seconds": {
+      "default": 306.7
+    }
+  },
+  "variants": [
+    {
+      "name": "default",
+      "options": {
+        "size": "quick"
+      },
+      "transport": true,
+      "checks": [
+        {
+          "result": "prompt_plus_delayed_over_total",
+          "expect": 1.0,
+          "rel": 1e-05,
+          "why": "nu = nu prompt + nu delayed; the evaluated data hold the three as separate tables, equal to parts per million"
+        },
+        {
+          "result": "chi_prompt_sum",
+          "expect": 1.0,
+          "rel": 0.001,
+          "why": "the prompt spectrum divides an analog tally by a track-length one, so it sums to 1 within statistics"
+        },
+        {
+          "result": "chi_delayed_sum",
+          "expect": 1.0,
+          "rel": 1e-09
+        },
+        {
+          "result": "beta_total",
+          "min": 0.004,
+          "max": 0.009,
+          "why": "the mixture's: U-235's 0.0065, raised by U-238's fast fissions (0.015), lowered by Pu-239's (0.002)"
+        },
+        {
+          "result": "decay_constants_rise",
+          "equals": true,
+          "why": "the six groups are ordered from long-lived to short-lived precursors"
+        },
+        {
+          "result": "lambda_1_U235",
+          "min": 0.01,
+          "max": 0.016,
+          "why": "U-235's longest-lived group, about 55 s half-life"
+        },
+        {
+          "result": "chi_mean_MeV_delayed",
+          "max": 0.7,
+          "why": "delayed neutrons are born far softer than prompt ones (about 2 MeV)"
+        },
+        {
+          "result": "beta_U235",
+          "min": 0.006,
+          "max": 0.0072,
+          "why": "U-235's delayed fraction, 0.0065 for thermal fission"
+        }
+      ]
+    }
+  ]
+}

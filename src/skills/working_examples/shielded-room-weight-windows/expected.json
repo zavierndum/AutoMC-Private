@@ -1,0 +1,44 @@
+{
+  "example": "shielded-room-weight-windows",
+  "derived_from": "OpenMC notebook 'Variance Reduction - Weight Windows' (openmc-notebooks develop bb39f25)",
+  "reference_runs": {
+    "date": "2026-11-02",
+    "openmc": "0.15.3",
+    "data": "ENDF/B-VIII.0 (HDF5)",
+    "size": "reference",
+    "threads": 4,
+    "seconds": {
+      "default": 93.4
+    },
+    "result": {
+      "reached_analog": 0.5691,
+      "reached_windows": 0.7775,
+      "analog_s": 3.1763081550598145,
+      "windows_s": 85.72871923446655,
+      "agreement_within_3_sigma": 0.9829573934837093
+    }
+  },
+  "variants": [
+    {
+      "name": "default",
+      "options": {
+        "mesh": 100,
+        "size": "quick"
+      },
+      "transport": true,
+      "script": "run.py",
+      "checks": [
+        {
+          "result": "reached_ratio",
+          "min": 1.1,
+          "why": "with weight windows neutrons get further through the concrete"
+        },
+        {
+          "result": "agreement_within_3_sigma",
+          "min": 0.9,
+          "why": "weight windows change the noise, not the answer"
+        }
+      ]
+    }
+  ]
+}

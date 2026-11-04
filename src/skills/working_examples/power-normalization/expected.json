@@ -1,0 +1,44 @@
+{
+  "example": "power-normalization",
+  "derived_from": "OpenMC notebook 'Tally Power Normalization' (openmc-notebooks v0.15.0)",
+  "reference_runs": {
+    "date": "2026-11-02",
+    "openmc": "0.15.3",
+    "data": "ENDF/B-VIII.0 (HDF5)",
+    "size": "reference",
+    "threads": 4,
+    "seconds": {
+      "default": 33.3
+    }
+  },
+  "variants": [
+    {
+      "name": "default",
+      "options": {
+        "size": "quick"
+      },
+      "transport": true,
+      "checks": [
+        {
+          "result": "power_check",
+          "expect": 1.0,
+          "rel": 1e-12,
+          "why": "S x H is the power, by construction"
+        },
+        {
+          "result": "MeV_per_fission",
+          "min": 185.0,
+          "max": 200.0,
+          "why": "U-235's recoverable energy per fission, about 193 MeV"
+        },
+        {
+          "result": "keff",
+          "expect": 0.689899663933013,
+          "sigma": 0.000411363425790286,
+          "n_sigma": 4,
+          "why": "the reference run here"
+        }
+      ]
+    }
+  ]
+}

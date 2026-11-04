@@ -1,0 +1,28 @@
+# AutoMC's Python packages in the image (WD-5), pinned to the automc environment of 2026-11-01 (python -m pip list in WSL). OpenMC,
+# NumPy, h5py, pandas and SciPy come from conda-forge in the Dockerfile; Visual-Parser (and torch) only with VISUAL_PARSER=yes.
+langgraph==1.2.17
+langgraph-checkpoint==4.3.0
+langchain-core==1.7.0
+langchain-openai==1.7.2
+langchain-ollama==1.1.0
+langchain-google-genai==4.4.0
+langchain-text-splitters==1.1.3
+langsmith==0.14.12
+openai==3.37.0
+google-genai==2.23.0
+ollama==0.6.3
+tiktoken==0.14.0
+httpx==0.28.1
+requests==2.34.2
+beautifulsoup4==4.15.0
+prompt_toolkit==3.0.53
+rich==15.0.0
+PyYAML==6.0.3
+psutil==7.2.2
+openpyxl==3.1.5
+pypdf==5.5.0
+pymupdf==2.0
+pillow==12.3.0
+sqlite-vec==0.1.9
+jupyter_client==8.10.0
+ipykernel==7.4.0

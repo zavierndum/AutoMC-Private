@@ -1,0 +1,61 @@
+{
+  "example": "flux-spectrum",
+  "derived_from": "OpenMC notebook 'Tally a Flux Spectrum' (openmc-notebooks v0.15.0)",
+  "reference_runs": {
+    "date": "2026-11-02",
+    "openmc": "0.15.3",
+    "data": "ENDF/B-VIII.0 (HDF5)",
+    "size": "reference",
+    "threads": 4,
+    "seconds": {
+      "default": 85.1
+    }
+  },
+  "variants": [
+    {
+      "name": "default",
+      "options": {
+        "bins": 500,
+        "size": "quick"
+      },
+      "transport": true,
+      "checks": [
+        {
+          "result": "grids_agree_fuel",
+          "expect": 1.0,
+          "rel": 0.0001,
+          "why": "both grids count the same tracks"
+        },
+        {
+          "result": "grids_agree_water",
+          "expect": 1.0,
+          "rel": 0.0001
+        },
+        {
+          "result": "thermal_peak_eV",
+          "min": 0.03,
+          "max": 0.2,
+          "why": "near 2kT, hardened a little by absorption"
+        },
+        {
+          "result": "u238_6_67eV_dip",
+          "max": 0.9,
+          "why": "U-238's resonance depresses the fuel's flux"
+        },
+        {
+          "result": "keff",
+          "expect": 1.1599350681418352,
+          "sigma": 0.00039062356873764134,
+          "n_sigma": 4,
+          "why": "the reference run here"
+        },
+        {
+          "result": "thermal_share_fuel",
+          "expect": 0.14649928399859985,
+          "rel": 0.03,
+          "why": "the reference run here"
+        }
+      ]
+    }
+  ]
+}

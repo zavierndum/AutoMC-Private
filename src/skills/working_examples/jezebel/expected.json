@@ -1,0 +1,41 @@
+{
+  "example": "jezebel",
+  "derived_from": "OpenMC examples/jezebel (MIT) and ICSBEP PU-MET-FAST-001",
+  "reference_runs": {
+    "date": "2026-11-01",
+    "openmc": "0.15.3",
+    "data": "ENDF/B-VIII.0 (HDF5)",
+    "size": "reference",
+    "threads": 4,
+    "seconds": {
+      "default": 7.2
+    },
+    "keff": [
+      0.9998188840298864,
+      0.00030180758283152585
+    ]
+  },
+  "variants": [
+    {
+      "name": "default",
+      "options": {
+        "size": "quick"
+      },
+      "transport": true,
+      "checks": [
+        {
+          "result": "keff",
+          "expect": 1.0,
+          "sigma": 0.002,
+          "n_sigma": 3,
+          "why": "ICSBEP PU-MET-FAST-001: 1.0000 +/- 0.0020 (reference run: 0.99982 +/- 0.00030)"
+        },
+        {
+          "result": "source_converged",
+          "equals": true,
+          "why": "the Shannon entropy is flat over the active batches"
+        }
+      ]
+    }
+  ]
+}

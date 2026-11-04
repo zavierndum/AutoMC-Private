@@ -1,0 +1,85 @@
+{
+  "example": "cad-geometry",
+  "derived_from": "OpenMC notebook 'DAGMC's CAD-Based Geometry in OpenMC' (openmc-notebooks v0.15.0)",
+  "reference_runs": {
+    "date": "2026-11-03",
+    "openmc": "0.15.3",
+    "data": "ENDF/B-VIII.0 (HDF5)",
+    "size": "reference",
+    "threads": 4,
+    "seconds": {
+      "pin": 32.3,
+      "teapot": 28.4,
+      "tokamak": 206.6
+    }
+  },
+  "variants": [
+    {
+      "name": "pin",
+      "options": {
+        "model": "pin",
+        "size": "quick"
+      },
+      "transport": true,
+      "script": "run_pin.py",
+      "checks": [
+        {
+          "result": "cad_minus_csg_sigma",
+          "min": -4.0,
+          "max": 4.0,
+          "why": "the CAD pin and its CSG twin are the same geometry, so only statistics separate them"
+        }
+      ]
+    },
+    {
+      "name": "teapot",
+      "options": {
+        "model": "teapot",
+        "size": "quick"
+      },
+      "transport": true,
+      "checks": [
+        {
+          "result": "water_over_iron",
+          "min": 1.0,
+          "why": "the neutrons are born in the water, and the iron is a thin shell around it"
+        },
+        {
+          "result": "leakage",
+          "min": 0.3,
+          "max": 0.95,
+          "why": "most neutrons leave a small teapot; some are absorbed in the water and the iron"
+        }
+      ]
+    },
+    {
+      "name": "tokamak",
+      "options": {
+        "model": "tokamak",
+        "size": "quick"
+      },
+      "transport": true,
+      "script": "run_tokamak.py",
+      "check_errors": [
+        "overlaps"
+      ],
+      "checks": [
+        {
+          "result": "leakage_half",
+          "min": 0.7,
+          "why": "the published half has no mirror at its cut: most neutrons leave through it"
+        },
+        {
+          "result": "leakage_mirrored",
+          "max": 0.3,
+          "why": "mirrored at its cut, the half stands for the whole torus, and few neutrons leave it"
+        },
+        {
+          "result": "half_over_mirrored_minus_1",
+          "max": -0.3,
+          "why": "the neutrons lost through the cut no longer reach the blanket"
+        }
+      ]
+    }
+  ]
+}

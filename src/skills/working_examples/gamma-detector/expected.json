@@ -1,0 +1,52 @@
+{
+  "example": "gamma-detector",
+  "derived_from": "OpenMC notebook 'Simulating the Signal of a Gamma Detector' (openmc-notebooks v0.15.0)",
+  "reference_runs": {
+    "date": "2026-11-02",
+    "openmc": "0.15.3",
+    "data": "ENDF/B-VIII.0 (HDF5)",
+    "size": "reference",
+    "threads": 4,
+    "seconds": {
+      "default": 9.2
+    }
+  },
+  "variants": [
+    {
+      "name": "default",
+      "options": {
+        "size": "quick"
+      },
+      "transport": true,
+      "checks": [
+        {
+          "result": "peak_662_over_continuum",
+          "min": 5.0,
+          "why": "a full-energy peak at Cs-137's line"
+        },
+        {
+          "result": "peak_800_over_continuum",
+          "min": 5.0,
+          "why": "a full-energy peak at the beam's energy"
+        },
+        {
+          "result": "below_edge_over_above",
+          "min": 1.2,
+          "why": "the 662 keV Compton continuum ends at 477 keV (the beam's continuum runs on past it, so the drop is partial)"
+        },
+        {
+          "result": "blurred_total_over_sharp",
+          "expect": 1.0,
+          "rel": 0.02,
+          "why": "broadening moves pulses, it does not lose them"
+        },
+        {
+          "result": "detected_fraction",
+          "min": 0.0,
+          "max": 1.0,
+          "why": "a probability per source photon"
+        }
+      ]
+    }
+  ]
+}

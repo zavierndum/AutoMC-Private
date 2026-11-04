@@ -1,0 +1,48 @@
+{
+  "example": "c-api",
+  "derived_from": "OpenMC notebook 'Using the C/C++ API' (openmc-notebooks v0.15.0)",
+  "reference_runs": {
+    "date": "2026-11-02",
+    "openmc": "0.15.3",
+    "data": "ENDF/B-VIII.0 (HDF5)",
+    "size": "reference",
+    "threads": 4,
+    "seconds": {
+      "default": 216.2
+    }
+  },
+  "variants": [
+    {
+      "name": "default",
+      "options": {
+        "size": "quick"
+      },
+      "transport": true,
+      "script": "run.py",
+      "checks": [
+        {
+          "result": "readback_worst",
+          "max": 1e-09,
+          "why": "OpenMC reports back the temperatures and densities that were set"
+        },
+        {
+          "result": "centroid_shift_sigma",
+          "max": -2.0,
+          "why": "denser water at the bottom moderates better there, so the heat moves down"
+        },
+        {
+          "result": "end_over_middle",
+          "min": 0.1,
+          "max": 0.8,
+          "why": "the pin's ends leak, so the end zones receive less heat than the middle ones"
+        },
+        {
+          "result": "bottom_over_top_minus_1",
+          "min": -0.25,
+          "max": 0.25,
+          "why": "as built the pin is the same at both ends, so its heat is symmetric within the statistics"
+        }
+      ]
+    }
+  ]
+}

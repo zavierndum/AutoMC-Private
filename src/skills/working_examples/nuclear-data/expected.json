@@ -1,0 +1,71 @@
+{
+  "example": "nuclear-data",
+  "derived_from": "OpenMC notebook 'Nuclear Data' (openmc-notebooks v0.15.0)",
+  "reference_runs": {
+    "date": "2026-11-02",
+    "openmc": "0.15.3",
+    "data": "ENDF/B-VIII.0 (HDF5 and ENDF), WMP v1.1",
+    "size": "the only size",
+    "threads": 1,
+    "seconds": {
+      "default": 5.5
+    }
+  },
+  "variants": [
+    {
+      "name": "default",
+      "options": {
+        "njoy_temperatures_K": [
+          300.0,
+          400.0,
+          500.0
+        ]
+      },
+      "transport": false,
+      "checks": [
+        {
+          "result": "total_minus_partials_rel",
+          "max": 1e-06,
+          "why": "below every threshold only elastic scattering and capture are open, so they make up the total"
+        },
+        {
+          "result": "hdf5_roundtrip_equal",
+          "equals": true,
+          "why": "the HDF5 file holds the same data as the object written to it"
+        },
+        {
+          "result": "urr_range_rel_diff",
+          "max": 1e-05,
+          "why": "the library's probability tables were made from this ENDF file's unresolved range"
+        },
+        {
+          "result": "njoy_vs_library_rel",
+          "max": 0.001,
+          "why": "NJOY run here on the same evaluation reproduces the library (6 K apart, in a flat region)"
+        },
+        {
+          "result": "doppler_area_rel",
+          "max": 0.001,
+          "why": "Doppler broadening spreads a resonance but keeps its area"
+        },
+        {
+          "result": "doppler_peak_ratio_900_0",
+          "max": 0.5,
+          "why": "at 900 K the resonance's peak is far lower than at 0 K"
+        },
+        {
+          "result": "gd157_capture_thermal_b",
+          "min": 240000.0,
+          "max": 265000.0,
+          "why": "Gd-157 has the largest thermal capture cross section of any stable nuclide, about 254,000 b"
+        },
+        {
+          "result": "n2n_threshold_MeV",
+          "min": 6.3,
+          "max": 6.5,
+          "why": "the (n,2n) threshold is the neutron separation energy of Gd-157 times (A + 1) / A"
+        }
+      ]
+    }
+  ]
+}

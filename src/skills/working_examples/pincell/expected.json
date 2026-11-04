@@ -1,0 +1,39 @@
+{
+  "example": "pincell",
+  "derived_from": "OpenMC notebook 'Modeling a Pin-Cell' (openmc-notebooks v0.15.0)",
+  "reference_runs": {
+    "date": "2026-11-01",
+    "openmc": "0.15.3",
+    "data": "ENDF/B-VIII.0 (HDF5)",
+    "size": "reference",
+    "threads": 4,
+    "seconds": {
+      "default": 56.8
+    }
+  },
+  "variants": [
+    {
+      "name": "default",
+      "options": {
+        "enrichment": 3.0,
+        "size": "quick"
+      },
+      "transport": true,
+      "checks": [
+        {
+          "result": "keff",
+          "expect": 1.3972759198869216,
+          "sigma": 0.000399177176217869,
+          "n_sigma": 4,
+          "why": "the reference run here"
+        },
+        {
+          "result": "u235_alpha",
+          "min": 0.15,
+          "max": 0.3,
+          "why": "a thermal spectrum: U-235's capture-to-fission ratio near 0.2"
+        }
+      ]
+    }
+  ]
+}

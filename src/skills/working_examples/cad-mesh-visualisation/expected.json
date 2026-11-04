@@ -1,0 +1,50 @@
+{
+  "example": "cad-mesh-visualisation",
+  "derived_from": "OpenMC notebook 'Unstructured Mesh: Tallies with CAD and Point Cloud Visualization' (openmc-notebooks v0.15.0)",
+  "reference_runs": {
+    "date": "2026-11-03",
+    "openmc": "0.15.3",
+    "data": "ENDF/B-VIII.0 (HDF5)",
+    "size": "reference",
+    "threads": 4,
+    "seconds": {
+      "default": 49.6
+    }
+  },
+  "variants": [
+    {
+      "name": "default",
+      "options": {
+        "size": "quick"
+      },
+      "transport": true,
+      "checks": [
+        {
+          "result": "fast_falls_with_distance",
+          "max": -0.3,
+          "why": "the fast flux falls off away from the point source"
+        },
+        {
+          "result": "slow_share_rises_with_distance",
+          "min": 0.1,
+          "why": "neutrons lose energy in the steel as they travel, so far from the source more of the flux is below 1 MeV"
+        },
+        {
+          "result": "leakage",
+          "min": 0.8,
+          "why": "a steel manifold in air holds few of the neutrons; most leave"
+        },
+        {
+          "result": "vtk_written",
+          "equals": true,
+          "why": "the tally goes out to a VTK file for ParaView or VisIt"
+        },
+        {
+          "result": "picture_written",
+          "equals": true,
+          "why": "the point cloud is drawn"
+        }
+      ]
+    }
+  ]
+}

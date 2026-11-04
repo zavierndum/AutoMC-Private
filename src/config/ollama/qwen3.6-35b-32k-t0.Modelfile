@@ -1,0 +1,18 @@
+# qwen3.6 35B-A3B with a 32k context and temperature 0: AutoMC's default local model from 2026-10-26, with the 128k variant
+# kept selectable. Same parameters as the Control Room Agent's 32k recipe of 2026-10-21; only num_ctx differs from the 128k recipe.
+#
+# Build it once, in the Ollama that AutoMC talks to (the WSL one by default), from AutoMC/src:
+#   ollama create qwen3.6:35b-32k-t0 -f config/ollama/qwen3.6-35b-32k-t0.Modelfile
+#
+# FROM must name the base model as that Ollama has it ('ollama list'): qwen3.6:35b-a3b in the WSL Ollama, qwen3.6:35b in the
+# Windows one. 32k leaves about 23k tokens for the conversation after AutoMC's system prompt and tool schemas (about 9.2k); Ollama
+# drops the oldest context silently when it is full, so the agent needs a context guard at this size.
+FROM qwen3.6:35b-a3b
+
+PARAMETER num_ctx 32768
+PARAMETER temperature 0
+PARAMETER top_k 20
+PARAMETER top_p 0.95
+PARAMETER min_p 0
+PARAMETER presence_penalty 1.5
+PARAMETER repeat_penalty 1

@@ -1,0 +1,61 @@
+{
+  "example": "pandas-dataframes",
+  "derived_from": "OpenMC notebook 'Pandas Dataframes' (openmc-notebooks v0.15.0)",
+  "reference_runs": {
+    "date": "2026-11-02",
+    "openmc": "0.15.3",
+    "data": "ENDF/B-VIII.0 (HDF5)",
+    "size": "reference",
+    "threads": 4,
+    "seconds": {
+      "default": 54.3
+    }
+  },
+  "variants": [
+    {
+      "name": "default",
+      "options": {
+        "size": "quick"
+      },
+      "transport": true,
+      "checks": [
+        {
+          "result": "pins_in_map",
+          "equals": 289
+        },
+        {
+          "result": "distribcell_rows",
+          "equals": 289
+        },
+        {
+          "result": "peak_near_mirrored_corner",
+          "equals": true,
+          "why": "within two pins of the corner furthest from the open faces"
+        },
+        {
+          "result": "lowest_at_open_corner",
+          "equals": true,
+          "why": "the corner between the two open faces"
+        },
+        {
+          "result": "worst_mirror_sigma",
+          "max": 4.5,
+          "why": "the boundaries make the map symmetric about the diagonal"
+        },
+        {
+          "result": "keff",
+          "expect": 0.6868727261873212,
+          "sigma": 0.0004604506330690264,
+          "n_sigma": 4,
+          "why": "the reference run here"
+        },
+        {
+          "result": "peak",
+          "expect": 2.081548642548905,
+          "rel": 0.03,
+          "why": "the reference run here"
+        }
+      ]
+    }
+  ]
+}

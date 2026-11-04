@@ -1,0 +1,25 @@
+# AutoMC facility pack, format 1 (documented in ../README.md). Public: everything here comes from public sources.
+format: 1
+pack: netl_public
+facility: netl
+title: NETL TRIGA from public sources (the pinned library defaults and the SAR), fresh fuel
+distribution: public
+default_preset: netl_public_fresh_fuel
+
+sources:
+  library:
+    what: CoreForge and progression_problems defaults (UT, BSD-3-Clause), pinned in AutoMC/library_snapshots
+    distribution: public
+  sar:
+    what: UT Austin NETL TRIGA Safety Analysis Report, NRC ADAMS ML23279A146
+    distribution: public
+
+items:
+  presets.yaml:
+    what: preset netl_public_fresh_fuel@1
+    sources: [library, sar]
+    distribution: public
+  assumptions.yaml:
+    what: assumptions register for this pack's preset
+    sources: [library, sar]
+    distribution: public

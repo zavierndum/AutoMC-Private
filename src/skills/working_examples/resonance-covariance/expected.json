@@ -1,0 +1,67 @@
+{
+  "example": "resonance-covariance",
+  "derived_from": "OpenMC notebook 'Nuclear Data: Resonance Covariance' (openmc-notebooks v0.15.0)",
+  "reference_runs": {
+    "date": "2026-11-02",
+    "openmc": "0.15.3",
+    "data": "ENDF/B-VIII.0 (ENDF)",
+    "size": "the only size",
+    "threads": 1,
+    "seconds": {
+      "default": 1.7
+    }
+  },
+  "variants": [
+    {
+      "name": "default",
+      "options": {
+        "samples": 2000,
+        "seed": 20261119,
+        "spin": 2.0
+      },
+      "transport": false,
+      "checks": [
+        {
+          "result": "covariance_size",
+          "equals": 180,
+          "why": "60 resonances, three parameters each (energy, neutron width, capture width)"
+        },
+        {
+          "result": "stored_upper",
+          "equals": true,
+          "why": "ENDF File 32 gives the symmetric matrix by its upper triangle; the full one must be rebuilt"
+        },
+        {
+          "result": "negative_eigen_rel",
+          "max": 1e-09,
+          "why": "a covariance matrix has no negative eigenvalues"
+        },
+        {
+          "result": "max_abs_correlation",
+          "max": 1.000000001,
+          "why": "a correlation lies between -1 and 1"
+        },
+        {
+          "result": "worst_mean_z",
+          "max": 4.5,
+          "why": "each sample mean is within its statistics of the evaluated value (the worst of 180)"
+        },
+        {
+          "result": "sd_ratio_min",
+          "min": 0.9,
+          "why": "the samples spread as much as the evaluated uncertainties say"
+        },
+        {
+          "result": "sd_ratio_max",
+          "max": 1.1,
+          "why": "the samples spread as much as the evaluated uncertainties say"
+        },
+        {
+          "result": "subset_block_diff",
+          "max": 0.0,
+          "why": "the subset's covariance is the matching block of the whole matrix"
+        }
+      ]
+    }
+  ]
+}

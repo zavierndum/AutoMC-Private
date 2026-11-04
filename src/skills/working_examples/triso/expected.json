@@ -1,0 +1,4 @@
+{"example": "triso", "derived_from": "OpenMC notebook 'Modeling TRISO Particles' (openmc-notebooks v0.15.0)",
+ "variants": [{"name": "default", "options": {"packing": 0.30, "box_cm": 1.0, "seed": 124848351, "lattice": 3}, "transport": false,
+               "checks": [{"result": "packing_fraction", "expect": 0.30, "rel": 0.01}, {"result": "all_inside", "equals": true},
+                          {"result": "no_overlap", "equals": true}]}]}

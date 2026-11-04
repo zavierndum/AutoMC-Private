@@ -1,0 +1,44 @@
+# An allow-list, like .dockerignore: only the package, the library snapshots, the container files and the public docs are tracked.
+# Never tracked: the nuclear data (downloads/, installed as SETUP.md section 3 says), workspaces and runs, devops/ (plans and
+# validation notes that name people and quote facility data), references, external files, the upstream clones, keys, and anything
+# restricted (it lives outside AutoMC). Add a top-level item here only after checking it holds none of these.
+/*
+!/.gitignore
+!/.gitattributes
+!/.dockerignore
+!/README.md
+!/CHANGELOG.md
+!/DESIGN.md
+!/SETUP.md
+!/TOOLS.md
+!/Dockerfile
+!/docker-compose.yml
+!/docker-compose.netl.yml
+!/docker/
+!/src/
+!/library_snapshots/
+!/scripts/
+/scripts/*
+!/scripts/start_automc_jupyter.sh
+!/scripts/start_jupyter.bat
+
+# never, anywhere
+__pycache__/
+*.pyc
+.pytest_cache/
+.ipynb_checkpoints/
+node_modules/
+.automc/
+*.env
+.env*
+.automc_jupyter_token
+*.pem
+id_rsa*
+# run outputs, in case one lands in a tracked folder
+statepoint.*.h5
+summary.h5
+tallies.out
+*.h5m
+*.vtk
+*.vtu
+*.log

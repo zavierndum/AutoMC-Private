@@ -1,0 +1,95 @@
+{
+  "example": "depletion",
+  "derived_from": "OpenMC notebook 'Pincell Depletion' (openmc-notebooks v0.15.0) and OpenMC examples/pincell_depletion (MIT; chain_simple.xml)",
+  "reference_runs": {
+    "date": "2026-11-02",
+    "openmc": "0.15.3",
+    "data": "ENDF/B-VIII.0 (HDF5)",
+    "size": "reference",
+    "threads": 4,
+    "seconds": {
+      "default": 121.5
+    }
+  },
+  "variants": [
+    {
+      "name": "default",
+      "options": {
+        "power_W": 174.0,
+        "steps_days": [
+          30,
+          30,
+          30,
+          30,
+          30,
+          30
+        ],
+        "integrator": "predictor",
+        "size": "quick"
+      },
+      "transport": true,
+      "script": "run.py",
+      "env": {
+        "OPENMC_CHAIN_FILE": "@example/chain_simple.xml"
+      },
+      "checks": [
+        {
+          "result": "steps",
+          "equals": 6
+        },
+        {
+          "result": "u235_falls_every_step",
+          "equals": true
+        },
+        {
+          "result": "k_drop_sigma",
+          "min": 2.0,
+          "why": "k falls with burnup (U-235 used, Xe-135 and other poisons made)"
+        },
+        {
+          "result": "power_ratio_worst",
+          "max": 1e-06,
+          "why": "the operator scales the rates so the fission power is the power asked for"
+        },
+        {
+          "result": "u235_destroyed_over_fissioned",
+          "expect": 1.0,
+          "rel": 0.03,
+          "why": "chain_simple gives U-235 fission only (no capture); the start-of-step rates of the predictor overstate a step's fissions slightly"
+        },
+        {
+          "result": "u235_share_of_fissions",
+          "min": 0.85,
+          "max": 0.99,
+          "why": "most fissions are U-235's; U-238 fissions fast"
+        },
+        {
+          "result": "k_start",
+          "expect": 1.4589857931745693,
+          "sigma": 0.0008471641494065626,
+          "n_sigma": 4,
+          "why": "the reference run here"
+        },
+        {
+          "result": "k_end",
+          "expect": 1.4081498559416852,
+          "sigma": 0.0007891877374891397,
+          "n_sigma": 4,
+          "why": "the reference run here"
+        },
+        {
+          "result": "u235_burned_fraction",
+          "expect": 0.1483148506377523,
+          "rel": 0.005,
+          "why": "the reference run here"
+        },
+        {
+          "result": "xe135_end_over_first_step",
+          "expect": 0.8997123526127334,
+          "rel": 0.05,
+          "why": "the reference run here (Xe-135 settles as the flux shifts)"
+        }
+      ]
+    }
+  ]
+}

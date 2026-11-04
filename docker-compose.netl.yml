@@ -1,0 +1,8 @@
+# At NETL only: the restricted facility packs, mounted read only at run time (never built into the image). With it AutoMC runs in
+# facility mode (src/automc_settings.py): cloud models see only public results.
+#   AUTOMC_RESTRICTED_PACKS=/path/to/AutoMC_restricted/facility_packs \
+#     docker compose -f docker-compose.yml -f docker-compose.netl.yml run --rm automc chat
+services:
+  automc:
+    volumes:
+      - "${AUTOMC_RESTRICTED_PACKS:?set AUTOMC_RESTRICTED_PACKS to the restricted facility packs folder}:/packs:ro"

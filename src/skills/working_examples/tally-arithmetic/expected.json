@@ -1,0 +1,92 @@
+{
+  "example": "tally-arithmetic",
+  "derived_from": "OpenMC notebook 'Tally Arithmetic' (openmc-notebooks v0.15.0)",
+  "reference_runs": {
+    "date": "2026-11-02",
+    "openmc": "0.15.3",
+    "data": "ENDF/B-VIII.0 (HDF5)",
+    "size": "reference",
+    "threads": 4,
+    "seconds": {
+      "default": 120.0
+    }
+  },
+  "variants": [
+    {
+      "name": "default",
+      "options": {
+        "height_cm": 100.0,
+        "size": "quick"
+      },
+      "transport": true,
+      "checks": [
+        {
+          "result": "product_over_balance",
+          "expect": 1.0,
+          "rel": 1e-09,
+          "why": "the six ratios telescope to production / losses"
+        },
+        {
+          "result": "balance_minus_keff_sigma",
+          "min": -4.0,
+          "max": 4.0,
+          "why": "the balance is an estimate of the same k"
+        },
+        {
+          "result": "leakage_per_absorption",
+          "min": 0.0,
+          "max": 0.2,
+          "why": "some neutrons leak through the open ends"
+        },
+        {
+          "result": "keff",
+          "expect": 0.9897912826192085,
+          "sigma": 0.0003471256575248727,
+          "n_sigma": 4,
+          "why": "the reference run here"
+        },
+        {
+          "result": "fast_fission",
+          "expect": 1.2076352132591879,
+          "sigma": 0.0009168440594211261,
+          "n_sigma": 4,
+          "why": "the reference run here"
+        },
+        {
+          "result": "resonance_escape",
+          "expect": 0.6914141916487843,
+          "sigma": 0.0004794858523671656,
+          "n_sigma": 4,
+          "why": "the reference run here"
+        },
+        {
+          "result": "thermal_utilization",
+          "expect": 0.7496524876994632,
+          "sigma": 0.0006048704325236051,
+          "n_sigma": 4,
+          "why": "the reference run here"
+        },
+        {
+          "result": "eta",
+          "expect": 1.6588974076866643,
+          "sigma": 0.0013596058396677384,
+          "n_sigma": 4,
+          "why": "the reference run here"
+        },
+        {
+          "result": "fast_non_leakage",
+          "expect": 0.9581437283724741,
+          "sigma": 0.0005511979316511283,
+          "n_sigma": 4,
+          "why": "the reference run here"
+        },
+        {
+          "result": "u235_thermal_fission_barns",
+          "expect": 374.2653894628366,
+          "rel": 0.02,
+          "why": "the reference run here"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,77 @@
+{
+  "about": "Input files some working examples need and AutoMC does not ship. `python -m automc data fetch EXAMPLE` downloads them into the data cache (AUTOMC_DATA_CACHE, else ~/.cache/automc/data) and checks each against its SHA-256; an example's build.py copies what it needs from there into its case.",
+  "files": {
+    "cad/fuel_pin.h5m": {
+      "sha256": "e65ec96039d68a03cda5f885cd4999dbf7722205d7b6fa88153eeddfae71933f",
+      "bytes": 1233420,
+      "url": "https://drive.google.com/uc?export=download&id=1sdCY1JxjoQg9Y3-3XlEnBDlwZtERnR_4",
+      "source": "the OpenMC notebook 'cad-based-geometry' (its link, Google Drive): a DAGMC fuel pin",
+      "examples": ["cad-geometry"]
+    },
+    "cad/teapot.h5m": {
+      "sha256": "66754a4a9a06a6add7cee8262765bddc7a8f7ed8cb15f5321d7b94a0a6929b74",
+      "bytes": 29642852,
+      "url": "https://drive.google.com/uc?export=download&id=1fYp2XKgEx7oCkF1IJJMx9Pi5WcgSkQLX",
+      "source": "the OpenMC notebook 'cad-based-geometry' (its link, Google Drive): the Utah teapot as a DAGMC model",
+      "examples": ["cad-geometry"]
+    },
+    "cad/paramak_with_graveyard.h5m": {
+      "sha256": "796c4773652144a9af31cc98479648846bfdd57328da3d441e159a618c1ea1e6",
+      "bytes": 18701516,
+      "url": "https://anl.box.com/shared/static/313tr9lkl81xg0mlr74xofvqhuoon5tk.h5m",
+      "source": "the OpenMC notebook 'cad-based-geometry' (its link, Argonne Box): a Paramak reactor with its graveyard",
+      "examples": ["cad-geometry"]
+    },
+    "cad/manifold.h5m": {
+      "sha256": "d027cf46ddc755232754eaeeec72699f15172599d50d979c096b6af2d2cd0890",
+      "bytes": 103024236,
+      "url": "https://anl.box.com/shared/static/kcitg5dyg4c1lcz8gaf2ekdy13lvev27.h5m",
+      "source": "the OpenMC notebook 'unstructured-mesh-part-ii' (its link, Argonne Box): a manifold as a DAGMC model",
+      "examples": ["cad-mesh-visualisation"]
+    },
+    "mesh/manifold_mesh.h5m": {
+      "sha256": "671c6a01278947d558131d2c07aedf604d9e6576c762d5c33fee74253ed80664",
+      "bytes": 5647344,
+      "url": "https://anl.box.com/shared/static/k58h1vx178g7grxbl5b24vri4ieu0ocf.h5m",
+      "source": "the OpenMC notebook 'unstructured-mesh-part-ii' (its link, Argonne Box): a tetrahedral mesh of the manifold (MOAB)",
+      "examples": ["cad-mesh-visualisation"]
+    },
+    "mesh/pin_mesh_moab.h5m": {
+      "sha256": "ea90636a00bb53ba4e937372a8001fc22d296bfbccf78453f3be4bb9888617e5",
+      "bytes": 22356720,
+      "url": "https://anl.box.com/shared/static/6yf39qsdzzsvr897sr9zsmmw6ibfd2os.h5m",
+      "source": "the OpenMC notebook 'unstructured-mesh-part-i' (its link, Argonne Box): a tetrahedral mesh of a pin (MOAB)",
+      "examples": ["unstructured-mesh-tallies"]
+    },
+    "mesh/pin_mesh_libmesh.e": {
+      "sha256": "6db7639262054659b0aa43699f30663ac1e93bc111b292baf6b68d5b92164ca4",
+      "bytes": 10084440,
+      "url": "https://anl.box.com/shared/static/ps78x848nco6j6zef1dtnj7j51k2raef.e",
+      "source": "the OpenMC notebook 'unstructured-mesh-part-i' (its link, Argonne Box): the same pin mesh for libMesh (Exodus); not used here, this OpenMC build has no libMesh",
+      "examples": []
+    },
+    "wmp/092238.h5": {
+      "sha256": "f68cf33be50c915263795e9bc8f1b485c58d47d75d1d41d0c593dfa8a7c07a9a",
+      "bytes": 617437,
+      "url": "https://github.com/mit-crpg/WMP_Library/releases/download/v1.1/092238.h5",
+      "source": "the windowed multipole library of MIT CRPG, release v1.1: U-238",
+      "examples": ["nuclear-data"]
+    },
+    "endf/n-001_H_002.endf": {
+      "sha256": "190fd04cebe2756a81302a176e83871be9d0f9f2a1d4e4134c828e8d9554bfca",
+      "bytes": 130340,
+      "zip": "https://www.nndc.bnl.gov/endf-b8.0/zips/ENDF-B-VIII.0_neutrons.zip",
+      "member": "ENDF-B-VIII.0_neutrons/n-001_H_002.endf",
+      "source": "ENDF/B-VIII.0, NNDC's neutron sublibrary (read from its archive by range requests, about 0.2 MB of 310 MB)",
+      "examples": ["nuclear-data"]
+    },
+    "endf/n-064_Gd_157.endf": {
+      "sha256": "3a365e591276d0304b0955b5ee07f65e335c80e73878174684b0927778c3f2bb",
+      "bytes": 3044484,
+      "zip": "https://www.nndc.bnl.gov/endf-b8.0/zips/ENDF-B-VIII.0_neutrons.zip",
+      "member": "ENDF-B-VIII.0_neutrons/n-064_Gd_157.endf",
+      "source": "ENDF/B-VIII.0, NNDC's neutron sublibrary (read from its archive by range requests, about 0.6 MB of 310 MB)",
+      "examples": ["nuclear-data", "resonance-covariance"]
+    }
+  }
+}
