@@ -207,6 +207,11 @@ class Runs(unittest.TestCase):
         fail = self.finished(self.start("fail", env={"AUTOMC_WORKER_TEST_FAIL": "init"})["job_id"])
         self.assertEqual(fail["status"], "failed", fail)
         self.assertIn("forced failure", fail["error"])
+        # the check of a failed run carries the end of its log, and the tool's result the knowledge base entries that match it
+        from tools import registry
+        out = registry.call("OpenMCRunCheckTool", {"job_id": fail["job_id"]})
+        self.assertTrue(any("status=failed" in line for line in out["job"]["log_tail"]), out)
+        self.assertIn("status=failed", [k["matched"] for k in out.get("known_errors", [])])
 
     def test_a_second_start_is_refused_while_one_runs(self):
         first = self.start("seq-c", env={"AUTOMC_WORKER_TEST_DELAY_S": "0.5"})

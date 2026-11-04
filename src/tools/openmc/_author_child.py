@@ -285,6 +285,11 @@ def check(args):
                 "use nuclides the library has (add_element picks the natural isotopes it can), or another library")
         if sab:
             add("error", "nuclear data", f"thermal scattering tables not in the library: {', '.join(sab)}", "check the S(a,b) names")
+    # Python writes a material whose fractions mix atom and weight percent, but OpenMC refuses it when it loads the model
+    for m in model.materials:
+        if len({n.percent_type for n in m.nuclides}) > 1:
+            add("error", "materials", f"material {m.name or m.id} gives some fractions as atom percent and some as weight percent; "
+                "OpenMC stops on it (Cannot mix atom and weight percents)", "give all of its fractions as atom (ao) or all as weight (wo)")
     # settings
     mode = s.run_mode
     if mode == "eigenvalue":

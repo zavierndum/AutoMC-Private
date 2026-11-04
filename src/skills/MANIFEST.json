@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "generated_at": "2026-11-04T07:58:08+00:00",
+  "generated_at": "2026-11-04T08:55:00+00:00",
   "file_count": 159,
   "files": {
-    "ERKB.yaml": "sha256:f1d4c0033e1924ac0f2e2502144d2f1ffcd98bc187c6fea128912a88cf819fda",
+    "ERKB.yaml": "sha256:996e4ebb5f8d777a286cb5c5f7590a2fa9d8d433345754892444ff1b8b529df8",
     "SKILL_POLICY.md": "sha256:b9d743ea2e6474778fc775fb6e5eb4e54790180fea2209ae01a8edbec46234aa",
     "core/SKILL.md": "sha256:69d5d4ab5db463fa7fd317ef87be07e3d08e8b397dfb7ee6920d7417dc54f1c8",
     "general-tools/SKILL.md": "sha256:1cf037755bed44c4abb80e5533a12d1d326af784dcabfae1d3cf76df165ef27c",

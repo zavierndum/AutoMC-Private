@@ -350,13 +350,11 @@ def system_prompt(provider):
     doc = load_prompt()
     skills = bundled_skills()
     available, skipped = pack_skills(provider.cloud)            # listed for the model, read on demand
-    erkb = (SKILLS_DIR / "ERKB.yaml").read_text(encoding="utf-8").strip() if (SKILLS_DIR / "ERKB.yaml").is_file() else ""
     parts = [f"# AutoMC {automc_version.VERSION}", render(doc, provider.cloud), "# Skills"]
     for s in skills:
         origin = "" if s.source == "bundled" else f" (from facility pack {s.source}, {s.label})"
         parts.append(f"## Skill: {s.name}{origin}\n{s.description}\n\n{s.text}")
-    if erkb:
-        parts.append(f"## Error knowledge base (ERKB.yaml)\n{erkb}")
+    # the error knowledge base is matched in code (agent/erkb.py: known_errors in failed results), not carried in every prompt
     memory_text, memory_info = _memory(provider)
     if memory_text:
         parts.append("# This workspace\n\n" + memory_text)

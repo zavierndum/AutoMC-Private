@@ -641,11 +641,23 @@ def summarize(job):
     return out
 
 
+LOG_TAIL_LINES = 25
+
+
+def _log_tail(log, n=LOG_TAIL_LINES):
+    try:
+        return [l.rstrip() for l in Path(log).read_text(encoding="utf-8", errors="replace").splitlines()[-n:]]
+    except OSError:
+        return []
+
+
 def check(job_id=None, case=None):
     job = _find(job_id, case)
     out = summarize(job)
-    folder, _ = _job_files(job)
+    folder, log = _job_files(job)
     out["recent_events"] = jobs.read_events(folder / "events.jsonl", last=5) if job["kind"] in ("run", "script") else []
+    if job["status"] in ("failed", "interrupted"):
+        out["log_tail"] = _log_tail(log)                     # what came before the error line (overlap lines before a crash)
     return out
 
 

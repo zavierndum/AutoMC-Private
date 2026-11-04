@@ -260,6 +260,8 @@ class Building(Workspace):
             "outside": (SPHERE.replace("openmc.stats.Point((0.0, 0.0, 0.0))", "openmc.stats.Point((100.0, 0.0, 0.0))"), "source"),
             "nofuel": (SPHERE.replace('settings.run_mode = "fixed source"', 'settings.run_mode = "eigenvalue"\nsettings.inactive = 2'),
                        "settings"),
+            # Python writes it; OpenMC would stop on it when loading the model
+            "mixed": (SPHERE.replace('water.add_nuclide("O16", 1.0)', 'water.add_nuclide("O16", 0.89, "wo")'), "materials"),
         }
         for name, (script, check) in cases.items():
             with self.subTest(name=name):

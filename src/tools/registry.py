@@ -5,7 +5,7 @@ MCP server read this list; none of them wraps a tool differently.
 """
 from __future__ import annotations
 
-from agent import skill_tool
+from agent import erkb, skill_tool
 from tools.chats import tools as chat_tools
 from tools.documents import tools as document_tools
 from tools.files import tools as file_tools
@@ -32,9 +32,14 @@ def describe():
 
 
 def call(name, args=None):
-    """Call a tool by name. An unknown name is an error payload like any other."""
+    """Call a tool by name. An unknown name is an error payload like any other. A failed result gets the error knowledge base's
+    entries that match its text (`known_errors`, agent/erkb.py)."""
     t = _BY_NAME.get(name)
     if t is None:
         return {"ok": False, "error": {"type": "UnknownTool", "field": "name", "message": f"no tool {name!r}; tools: {names()}",
                                        "exit_code": 2}}
-    return t["handler"](args)
+    result = t["handler"](args)
+    try:
+        return erkb.annotate(result)
+    except (erkb.ERKBError, OSError, ImportError):          # a broken knowledge base never breaks a tool; its tests catch it
+        return result

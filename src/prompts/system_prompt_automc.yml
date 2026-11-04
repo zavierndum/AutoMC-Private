@@ -170,8 +170,8 @@ sections:
       - A script run (run.py) runs in a new run folder with a copy of the case's files, without keys, under a time limit (an hour unless
         timeout_s says more, a day at most). It can be stopped or cancelled, but not paused, and it does not continue from a statepoint.
       - After a start, give the job id and when to check, then end the turn. Do not check in a loop.
-      - A failed run is read before anything changes. Read the error from OpenMCRunCheckTool, then the run's log with FileReadTool, and
-        match it in the error knowledge base.
+      - A failed run is read before anything changes. OpenMCRunCheckTool gives its error, the end of its log and the known_errors that
+        match them; read the whole log with FileReadTool when those do not explain it.
 
   results:
     title: Results and their errors
@@ -199,8 +199,9 @@ sections:
     items:
       - A tool result with ok false is an error. Quote its field and message, and fix the request; never invent the result it would have
         given.
-      - Look a run's error up in the error knowledge base before you change anything. It gives the cause and the fix of errors met
-        before.
+      - A failed result lists known_errors, the entries of the error knowledge base that its text matches, each with its cause and
+        fix. Follow them before you change anything. For an error none matches, read the whole knowledge base (SkillLookupTool, file
+        ERKB.yaml).
       - Change one thing at a time, and say what and why.
       - After three failed attempts at the same error, stop. Tell the user what you tried and what each attempt showed, and ask how to go
         on.

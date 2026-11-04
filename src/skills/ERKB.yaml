@@ -1,6 +1,8 @@
 # AutoMC error knowledge base, in AutoSAM's ERKB format. One entry per known error: detection_hint (a substring to look for in run.log
 # or an error message), signature, background, suggestion, confidence (high | medium | low), origin (seen: met in this project; source:
-# from the OpenMC source or documentation, not yet met here).
+# from the OpenMC source or documentation, not yet met here). agent/erkb.py matches the hints against every failed tool result and
+# attaches the entries found as known_errors; hints are unique. The slow tests provoke each message they can and check that its hint
+# is still in what OpenMC, h5py or NumPy write (tests/skills/test_erkb_messages.py).
 
 - detection_hint: "No cross_sections.xml file was specified"
   signature: "OpenMC stops at start-up: no cross_sections.xml file was specified in materials.xml or in OPENMC_CROSS_SECTIONS"
@@ -37,8 +39,8 @@
   suggestion: >
     Report the number of lost-particle files and that the geometry has a gap. Suggest a geometry debug run (openmc -g) and a look at
     the location in the particle file; do not raise the lost-particle limit to make the error go away.
-  confidence: medium
-  origin: source
+  confidence: high
+  origin: seen
 
 - detection_hint: "does not contain cross sections for"
   signature: "OpenMC stops at start-up: the nuclear data library has no cross sections for a nuclide at or near a temperature"
@@ -47,9 +49,10 @@
     material temperature more than 10 K from the nearest one fails; a nuclide missing from the library fails at any temperature.
   suggestion: >
     For TRIGA builds, set conditions.temperature_method to "interpolation" (or "auto", which chooses it when needed), or use a
-    temperature near one of the library's. For a missing nuclide, report it; it needs another library.
-  confidence: medium
-  origin: source
+    temperature near one of the library's (each S(a,b) table has its own set). For a missing nuclide, report it; it needs another
+    library.
+  confidence: high
+  origin: seen
 
 - detection_hint: "status=failed"
   signature: "A job ends with status failed and an error line in run.log"
@@ -91,5 +94,173 @@
   suggestion: >
     Offer fewer energy bins (tallies_options.energy_bins), fewer angle bins, fewer tallies, or raising the limit on purpose, with the
     statepoint size each would give.
+  confidence: high
+  origin: seen
+
+# Materials and nuclear data
+
+- detection_hint: "Cannot mix atom and weight percents"
+  signature: "OpenMC stops loading the model: a material gives some fractions as atom percent and some as weight percent"
+  background: >
+    Python accepts the mixture and writes model.xml; OpenMC refuses it when it reads the material. The model check reports it before
+    a run (check "materials").
+  suggestion: >
+    Convert the material's fractions so that all are atom percent or all are weight percent, and say in build.py which they are
+    (openmc-authoring/rules/materials.md).
+  confidence: high
+  origin: seen
+
+- detection_hint: "Cross section HDF5 file"
+  signature: "OpenMC stops at start-up: the HDF5 cross section file model.xml names (a multigroup library) does not exist"
+  background: >
+    The library is named by a path that is absolute or points into a folder that is gone. OpenMC's Python API makes a path absolute
+    when it is set, relative to the folder Python was in, unless openmc.config["resolve_paths"] is False. The build tool keeps such
+    paths relative and the model check names a library that is missing.
+  suggestion: >
+    Write the library next to model.xml in build.py, name it relatively (materials.cross_sections = "mgxs.h5") and build again.
+  confidence: high
+  origin: seen
+
+- detection_hint: "Windowed multipole functionality is turned on, but no multipole"
+  signature: "A warning at start-up: multipole data were asked for, none were found, and the run goes on without them"
+  background: >
+    Windowed multipole data (Doppler broadening at any temperature) are separate files, not part of the HDF5 library here. The run
+    uses the tabulated temperatures instead, so it is not the run that was asked for, and nothing stops it.
+  suggestion: >
+    Say that the run did not use multipole data. Either get the multipole files (python -m automc data fetch for an example's file)
+    and add them to the library, or turn multipole off and choose a temperature method (openmc-authoring/rules/nuclear-data.md).
+  confidence: high
+  origin: seen
+
+- detection_hint: "Resonance reconstruction not available."
+  signature: "Python stops reconstructing cross sections from resonance parameters"
+  background: >
+    Reconstruction needs a compiled extension of OpenMC's Python package that this build lacks. Reading the parameters and their
+    covariance works without it.
+  suggestion: >
+    Process the ENDF file with NJOY (openmc.data.IncidentNeutron.from_njoy) for cross sections at a temperature;
+    working_examples/resonance-covariance works from the parameters directly.
+  confidence: high
+  origin: seen
+
+# Sources and transport
+
+- detection_hint: "Too few source sites satisfied the constraints"
+  signature: "The run stops while sampling the source: fewer than 1 in 20 sampled sites passed the source's constraints"
+  background: >
+    OpenMC samples again when a site fails a constraint (domains, fissionable material, energy or time bounds) and stops when fewer
+    than Settings.source_rejection_fraction (0.05) are accepted. The usual cause is a sampling box far larger than its target: the
+    CAD teapot's water filled 1.8% of its bounding box.
+  suggestion: >
+    Draw the sampling box around the target region (find its extent from the plots or by point queries). Lower
+    source_rejection_fraction only on purpose, and say so.
+  confidence: high
+  origin: seen
+
+- detection_hint: "could not be located in any cell"
+  signature: "A warning during transport: after crossing a surface a particle is in no cell and did not leak (a lost particle)"
+  background: >
+    There is a gap in the geometry, or space beyond the last cell without a boundary condition. The warning names the particle and
+    the surface; each one is a lost particle, and the run stops when they pass the limits (10, and one in a million of those run).
+  suggestion: >
+    Plot slices through the reported place. Find the cells whose regions use the named surface and define the missing cell on its
+    other side, or put a vacuum boundary on the outermost surface. Never raise the limits to make the run finish.
+  confidence: high
+  origin: seen
+
+- detection_hint: "Failed to open HDF5 file with mode 'w'"
+  signature: "A run stops at its start: OpenMC cannot write summary.h5 or a statepoint because another process holds the file open"
+  background: >
+    A statepoint opened in Python keeps its file and its linked summary open, and HDF5 locks them. A Python kernel (PythonRunTool's)
+    keeps such a file open between runs, so the next run in the same folder cannot write it.
+  suggestion: >
+    Open statepoints in a with block (with openmc.StatePoint(path) as sp:) or close them (sp.close()) before the next run. The job
+    service gives every run a new folder; this meets runs started by hand or by a script in an old folder.
+  confidence: high
+  origin: seen
+
+- detection_hint: "OpenMC aborted unexpectedly"
+  signature: "openmc.run raised: OpenMC ended with a failure code and printed no ERROR line, usually a crash"
+  background: >
+    OpenMC's Python API raises this when the executable fails without an error message, which is what a crash (a segmentation fault)
+    looks like. When OpenMC printed an ERROR line first, the API raises that line instead: a geometry-debug run that crashes after
+    its overlap lines reports the overlap.
+  suggestion: >
+    Read the output before the failure. Run the smallest case that shows it, and report it with OpenMC's version; do not change the
+    physics to make it pass.
+  confidence: medium
+  origin: source
+
+# CAD geometry (DAGMC)
+
+- detection_hint: "Geometry DAGMC file"
+  signature: "OpenMC stops at start-up: the DAGMC (.h5m) file model.xml names does not exist"
+  background: >
+    CAD files are fetched into the data cache and copied into the case by its build script. A file moved or renamed after the
+    build, or a path into another folder, is not found. The model check reports a missing or out-of-case file first.
+  suggestion: >
+    Fetch the example's data (python -m automc data fetch EXAMPLE) or put the file in the case, name it relatively, and build again.
+  confidence: high
+  origin: seen
+
+- detection_hint: "Unable to synchronously open file (unable to open file"
+  signature: "Python cannot open an HDF5 file that is not there (h5py's FileNotFoundError): a CAD geometry, a mesh, a statepoint, a library"
+  background: >
+    OpenMC's Python API opens a DAGMC file when it reads its material names, so a missing CAD file stops a build script or the
+    model check, not only a run. The message names the path.
+  suggestion: >
+    Read the path in the message: a file that is missing (fetch or copy it), or an absolute path from another folder (name it
+    relative to the case).
+  confidence: high
+  origin: seen
+
+- detection_hint: "contains a cell with ID"
+  signature: "OpenMC stops loading the model: a DAGMC universe has a cell whose id a CSG cell already uses"
+  background: >
+    DAGMC numbers its volumes from 1, and so does OpenMC's Python API for CSG cells; with CAD inside a CSG model the two clash.
+  suggestion: >
+    Set auto_geom_ids = True on the DAGMCUniverse (and auto_mat_ids when material ids clash), so that its ids follow the CSG ones
+    (openmc-authoring/rules/cad-and-meshes.md).
+  confidence: high
+  origin: seen
+
+- detection_hint: "not found for volume (cell)"
+  signature: "OpenMC stops loading the model: a DAGMC volume's material tag matches no material"
+  background: >
+    Each volume of the file carries a material tag, matched with a Material's name, or with its id when the tag is a number.
+    DAGMCUniverse.material_names lists the file's tags.
+  suggestion: >
+    Define a material for the tag the message names, with that exact name (or that id), and build again.
+  confidence: high
+  origin: seen
+
+- detection_hint: "No graveyard volume found in the DagMC model"
+  signature: "A warning at start-up: a DAGMC model used as the whole geometry has no graveyard volume"
+  background: >
+    DAGMC ends particles in the graveyard; without one, particles that leave the CAD volumes are lost, and the run soon stops on lost
+    particles.
+  suggestion: >
+    Add a graveyard in the CAD export, or put the DAGMC universe in a CSG cell with vacuum boundaries
+    (DAGMCUniverse.bounded_universe).
+  confidence: medium
+  origin: source
+
+# Python
+
+- detection_hint: "has no attribute 'trapz'"
+  signature: "Python stops: NumPy 2 has no numpy.trapz"
+  background: >
+    NumPy 2 renamed it numpy.trapezoid; older scripts and the OpenMC notebooks still call trapz.
+  suggestion: >
+    Use numpy.trapezoid, with the same arguments.
+  confidence: high
+  origin: seen
+
+- detection_hint: "No module named 'vtk"
+  signature: "Python stops writing mesh results to VTK: the vtk package is not installed"
+  background: >
+    The write_data_to_vtk method of OpenMC's meshes imports vtk (or vtkmodules), which this environment does not have.
+  suggestion: >
+    Write the legacy VTK text format directly, as working_examples/cad-mesh-visualisation does, or ask the user whether to install vtk.
   confidence: high
   origin: seen
