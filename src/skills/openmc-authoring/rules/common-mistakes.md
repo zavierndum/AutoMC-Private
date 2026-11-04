@@ -1,7 +1,7 @@
 # Common mistakes
 
 Derived from: the OpenMC 0.15.3 user's guide, troubleshooting page (MIT), and from what the 29 working examples met while they were
-built (devops/AutoMC_Authoring_Plan.md, section 12). Written for AutoMC. Each line names the rule file that explains it.
+built (their READMEs tell each story). Written for AutoMC. Each line names the rule file that explains it.
 
 ## Mistakes that give no error
 

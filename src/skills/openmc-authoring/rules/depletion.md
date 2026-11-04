@@ -3,8 +3,8 @@
 Derived from: the OpenMC 0.15.3 user's guide, depletion page, and the depletion chain and results format pages (MIT). Written for
 AutoMC; arguments and defaults checked in the installed package (2026-11-04).
 
-1. **A depletion is a script run** (`run.py`, decision A13): it runs transport many times. `build.py` builds the model; `run.py`
-   imports it and integrates (`working_examples/depletion`).
+1. **A depletion is a script run** (`run.py`, planned with OpenMCRunStartTool with the case and the script): it runs transport many
+   times. `build.py` builds the model; `run.py` imports it and integrates (`working_examples/depletion`).
 2. **A chain** lists the nuclides, their decays and reactions, and fission yields. Give it as `chain_file` or through
    `openmc.config["chain_file"]` (the variable OPENMC_CHAIN_FILE). The ENDF/B-VIII.0 data here come without one; the example uses the
    small teaching chain of OpenMC's examples, which leaves out reactions a real burnup calculation needs (it gives U-235 no

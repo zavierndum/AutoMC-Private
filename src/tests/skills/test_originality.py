@@ -1,7 +1,7 @@
 """
-Nothing in AutoMC's skills or system prompt is copied from OpenMC's documentation, its script examples or the OpenMC notebooks
-(devops/AutoMC_Authoring_Plan.md, section 4; decisions A9, B1 and B2). Every text file under src/skills and src/prompts is compared
-with them:
+Nothing in AutoMC's skills or system prompt is copied from OpenMC's documentation, its script examples or the OpenMC notebooks: they
+are adapted, in our own words and code, with the physics and the numbers kept. Every text file under src/skills and src/prompts is
+compared with them:
 
     prose   a run of PROSE_WORDS (12) words in common fails, after lower-casing and dropping punctuation, markup and links
     code    a block of CODE_LINES (5) non-trivial lines in common fails, after normalising spacing. Imports, comments, docstrings, lone
@@ -11,7 +11,7 @@ with them:
 
 The sources are the local clones next to src/ (openmc-reference: the 0.15.3 manual and examples, MIT; openmc-notebooks: no licence
 file, so nothing may be copied from it at all). The notebooks are read from the working tree, which equals the tag v0.15.0 except for
-shielded_room_weight_window, newer and also an example's source (AU-0). Where the clones are missing the comparison skips, saying why;
+shielded_room_weight_window, newer and also an example's source. Where the clones are missing the comparison skips, saying why;
 the checker's own tests always run. A failure names our file and line, the source and the shared text, so it can be rewritten.
 """
 import io

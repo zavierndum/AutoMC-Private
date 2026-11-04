@@ -1,9 +1,9 @@
 """
-The skill files hold together (devops/AutoMC_Authoring_Plan.md, section 13, step 3.2): each skill's SKILL.md has its front matter,
-each rule file says what it was derived from, every working example and rule file a skill names exists, every rule file is listed
-in its skill's table, and every OpenMC name a rule writes in backticks (`openmc.Material.add_nuclide`) exists in the installed OpenMC
-(decision B7), so that a rule cannot send the model to a class or function that is not there. The authoring template builds and
-passes the model check through the build tool.
+The skill files hold together: each skill's SKILL.md has its front matter, each rule file says what it was derived from, every
+working example and rule file a skill names exists, every rule file is listed in its skill's table, and every OpenMC name a rule
+writes in backticks (`openmc.Material.add_nuclide`) exists in the installed OpenMC, so that a rule cannot send the model to a class
+or function that is not there. The skills name no internal planning document or label, which a reader of the published files cannot
+open. The authoring template builds and passes the model check through the build tool.
 """
 import importlib
 import importlib.util
@@ -20,6 +20,8 @@ HAVE_OPENMC = importlib.util.find_spec("openmc") is not None
 _OPENMC_NAME = re.compile(r"`(openmc(?:\.[A-Za-z_]\w*)+)")
 _EXAMPLE = re.compile(r"working_examples/([a-z0-9][a-z0-9-]*)")
 _RULE = re.compile(r"\brules/([a-z0-9-]+\.md)")
+# internal planning documents and their labels: devops/ is never published, so a published file must not send its reader there
+_PLAN_LABEL = re.compile(r"devops/|ERKB_LESSONS|\b(?:decisions?|Block \d+) [A-Z]{1,2}\d+\b|\b(?:AU|WD|GT|PR|MS|SF)-\d\b")
 
 
 def skill_texts():
@@ -76,6 +78,29 @@ class SkillFiles(unittest.TestCase):
             for rule in set(_RULE.findall(text)):
                 with self.subTest(file=p.relative_to(SKILLS).as_posix(), rule=rule):
                     self.assertTrue((SKILLS / skill / "rules" / rule).is_file())
+
+    def test_the_skills_and_the_prompt_name_no_planning_document_or_label(self):
+        """What the model reads and the repository publishes stands on its own: no devops/ path, no decision or phase label
+        (2026-11-04: two rule files said "decision A13")."""
+        for p in sorted(SKILLS.rglob("*")):
+            if p.is_file() and p.suffix in {".md", ".yaml", ".yml", ".py", ".json"} and "__pycache__" not in p.parts:
+                found = _PLAN_LABEL.findall(p.read_text(encoding="utf-8", errors="replace"))
+                with self.subTest(file=p.relative_to(SKILLS).as_posix()):
+                    self.assertEqual(found, [])
+        for bad in ("see devops/AutoMC_Plan.md", "decision A13", "Block 5 decision D7", "built in AU-2"):
+            self.assertTrue(_PLAN_LABEL.search(bad), bad)
+        for fine in ("the C5G7 benchmark", "a P0 correction", "U-235 and Pu-239", "ICRP-116", "SHEM-361"):
+            self.assertFalse(_PLAN_LABEL.search(fine), fine)
+        try:
+            from agent import prompt
+            from agent.llm import Provider
+        except ImportError:                                      # the prompt's renderer needs the agent's dependencies
+            return
+        for kind, account in (("local", "self_hosted"), ("cloud", "personal")):
+            text, _ = prompt.system_prompt(Provider(name="t", kind=kind, account=account, backend="openai_compatible", base_url="x",
+                                                    model="m"))
+            with self.subTest(prompt=kind):
+                self.assertEqual(_PLAN_LABEL.findall(text), [])
 
     def test_every_rule_file_is_listed_in_its_skill(self):
         for folder in sorted({p.parent.parent for p in rule_files()}):

@@ -6,8 +6,8 @@ checked in the installed package (2026-11-04).
 ## When to use it
 
 1. **`openmc.lib` runs OpenMC inside Python:** change a material or a temperature between batches or between runs, find cells, step
-   batches by hand, or make weight windows. Anything that uses it runs transport, so it is a script run (`run.py`, decision A13),
-   never part of `build.py` (`working_examples/c-api`).
+   batches by hand, or make weight windows. Anything that uses it runs transport, so it is a script run (`run.py`, planned with
+   OpenMCRunStartTool with the case and the script), never part of `build.py` (`working_examples/c-api`).
 
 ## How
 
