@@ -16,7 +16,7 @@
   origin: seen
 
 - detection_hint: "Overlapping cells detected"
-  signature: "Geometry debug mode (openmc -g) stops with: Overlapping cells detected: <cell> (<name>), <cell> (<name>)"
+  signature: "Geometry debug mode (openmc -g) stops with: Overlapping cells detected: <cell id>, <cell id> on universe <universe id>"
   background: >
     Two cells claim the same space. Point queries cannot see this (they return the first matching cell), and ordinary transport may
     run without complaint while particles are tracked in the wrong material. In this project a library cell (the graphite reflector)
@@ -34,11 +34,13 @@
 - detection_hint: "Maximum number of lost particles has been reached"
   signature: "The run stops after too many lost particles; particle_*.h5 files appear in the run folder"
   background: >
-    A lost particle reached a point that no cell covers (a gap in the geometry) or crossed into undefined space. The particle files
-    record where. A few lost particles stop the run only when they exceed the limit, but any lost particle means a geometry error.
+    A lost particle reached a point that no cell covers (a gap in the geometry) or crossed into undefined space. Each particle file
+    holds where that history started, not where it was lost. A few lost particles stop the run only when they exceed the limit, but
+    any lost particle means a geometry error.
   suggestion: >
-    Report the number of lost-particle files and that the geometry has a gap. Suggest a geometry debug run (openmc -g) and a look at
-    the location in the particle file; do not raise the lost-particle limit to make the error go away.
+    Report the number of lost-particle files and that the geometry has a gap. Replay one file (openmc.run(restart_file=...)) to get
+    the point where it was lost, plot there, and see openmc-execution/rules/troubleshooting.md; do not raise the lost-particle limit to
+    make the error go away.
   confidence: high
   origin: seen
 
@@ -163,8 +165,10 @@
     There is a gap in the geometry, or space beyond the last cell without a boundary condition. The warning names the particle and
     the surface; each one is a lost particle, and the run stops when they pass the limits (10, and one in a million of those run).
   suggestion: >
-    Plot slices through the reported place. Find the cells whose regions use the named surface and define the missing cell on its
-    other side, or put a vacuum boundary on the outermost surface. Never raise the limits to make the run finish.
+    The warning names a surface, not a place: replay one particle file to get the point where it was lost
+    (openmc-execution/rules/troubleshooting.md) and plot slices through it. Find the cells whose regions use the named surface and
+    define the missing cell on its other side, or put a vacuum boundary on the outermost surface. Never raise the limits to make the
+    run finish.
   confidence: high
   origin: seen
 

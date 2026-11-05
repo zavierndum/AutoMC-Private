@@ -37,10 +37,14 @@ model this takes about 100 s before batch 1, so a check right after the start sh
 | running, paused | active | check again later |
 | success | all batches done | read the result (RunResultReaderTool with the run folder) |
 | stopped | ended early on request | read the result; continuing needs approval |
-| failed | the run reported an error | read the error, match it in ERKB.yaml, explain; do not restart blindly |
+| failed | the run reported an error | read the error, its log tail and its known_errors, explain; do not restart blindly |
 | interrupted | the process vanished without finishing (machine restart, killed) | it can continue from its last statepoint with approval |
 | cancelled | killed on request | as interrupted |
 
 ## Sequences
 A sweep or a list of cases runs as one job: cases already finished are skipped, the others run in turn; pause, resume and stop act on
 the case that is running. The check lists every case with its status and k-eff.
+
+## When it goes wrong
+For a crash with no error line, lost particles, a geometry-debug run and its coverage, CAD file checks or a depletion that hangs, read
+`troubleshooting.md` (SkillLookupTool, `file` set to `openmc-execution/rules/troubleshooting.md`).

@@ -1,6 +1,7 @@
 """
 The skill files hold together: each skill's SKILL.md has its front matter, each rule file says what it was derived from, every
-working example and rule file a skill names exists, every rule file is listed in its skill's table, and every OpenMC name a rule
+working example and rule file a skill, the knowledge base or the prompt names exists, every rule file is listed in its skill's table,
+and every OpenMC name a rule
 writes in backticks (`openmc.Material.add_nuclide`) exists in the installed OpenMC, so that a rule cannot send the model to a class
 or function that is not there. The skills name no internal planning document or label, which a reader of the published files cannot
 open. The authoring template builds and passes the model check through the build tool.
@@ -62,7 +63,7 @@ class SkillFiles(unittest.TestCase):
                 self.assertRegex(head[1], r"(?m)^description: \S")
 
     def test_every_rule_file_has_a_title_and_says_what_it_was_derived_from(self):
-        self.assertGreaterEqual(len(rule_files()), 22)                    # authoring 18, validation 4
+        self.assertGreaterEqual(len(rule_files()), 28)                    # authoring 18, validation 4, execution 1, post-processing 5
         for p in rule_files():
             with self.subTest(rule=p.relative_to(SKILLS).as_posix()):
                 lines = p.read_text(encoding="utf-8").splitlines()
@@ -78,6 +79,18 @@ class SkillFiles(unittest.TestCase):
             for skill, rule in set(_RULE.findall(text)):
                 with self.subTest(file=p.relative_to(SKILLS).as_posix(), rule=f"{skill or here}/rules/{rule}"):
                     self.assertTrue((SKILLS / (skill or here) / "rules" / rule).is_file())
+
+    def test_every_skill_file_the_knowledge_base_and_the_prompt_name_exists(self):
+        """ERKB.yaml and the system prompt send the model to skill files by their full path."""
+        for p in (SKILLS / "ERKB.yaml", automc_paths.SRC / "prompts" / "system_prompt_automc.yml"):
+            text = p.read_text(encoding="utf-8")
+            for name in set(_EXAMPLE.findall(text)) - {"index"}:
+                with self.subTest(file=p.name, example=name):
+                    self.assertTrue((EXAMPLES / name).is_dir())
+            for skill, rule in set(_RULE.findall(text)):
+                with self.subTest(file=p.name, rule=f"{skill}/rules/{rule}"):
+                    self.assertTrue(skill, "a path outside a skill names its skill")
+                    self.assertTrue((SKILLS / skill / "rules" / rule).is_file())
 
     def test_the_skills_and_the_prompt_name_no_planning_document_or_label(self):
         """What the model reads and the repository publishes stands on its own: no devops/ path, no decision or phase label

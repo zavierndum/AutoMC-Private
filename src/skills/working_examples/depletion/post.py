@@ -39,7 +39,7 @@ def main():
     # eV per fission of every nuclide the chain lets fission (U-234 too: leaving it out misses about 1e-4 of the power)
     q = {n.name: r.Q for n in chain.nuclides for r in n.reactions if r.type == "fission"}
     def start_rate(step, nuc):
-        """Fissions per second of `nuc` at the start of `step` (the final time point holds no rates: nothing follows it)."""
+        """Fissions per second of `nuc` at the start of `step` (the final time point's rates begin no step, so they are not used)."""
         r = results[step]
         return r.rates.get(mat, nuc, "fission") * r[mat, nuc]
     steps = len(days) - 1

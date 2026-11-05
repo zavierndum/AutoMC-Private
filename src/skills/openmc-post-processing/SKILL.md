@@ -1,6 +1,6 @@
 ---
 name: OpenMC post-processing
-description: Reading a finished OpenMC run - k-eff and its error, active batches, worths in pcm and dollars, plausibility, tallies.
+description: Reading a finished OpenMC run - k-eff and its error, active batches, worths in pcm and dollars, plausibility, tallies; rule files for statepoints, tally arrays, spectra, derived numbers, depletion and multigroup results.
 ---
 
 # openmc-post-processing
@@ -29,3 +29,15 @@ description: Reading a finished OpenMC run - k-eff and its error, active batches
 ## Tallies
 - Each tally has a bin count and a flag for finite values; a tally with no non-zero bins usually means it scored in the wrong cell or
   energy range. Large tallies make large statepoints (about 16 bytes per bin).
+
+## Rule files, for a post.py or a Python run (`openmc-post-processing/rules/...`, read with SkillLookupTool)
+| Question | File |
+|---|---|
+| which statepoint, the summary, k, batches, the source bank, finding a tally | `statepoints.md` |
+| array shapes and filter order, mesh order and volumes, VTK, DataFrames, sums | `tally-arrays.md` |
+| spectra per lethargy or per eV, group structures, pulse-height spectra | `spectra.md` |
+| ratios, tally arithmetic and its errors, microscopic cross sections, balances | `derived-quantities.md` |
+| depletion results, multigroup cross sections from a run | `depletion-and-mgxs.md` |
+
+Per source particle to physical units: `openmc-authoring/rules/normalization.md`. Relative errors, the figure of merit and biased
+maxima: `openmc-validation/rules/statistics.md`. Each rule names the working example whose `post.py` shows it.

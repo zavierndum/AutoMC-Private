@@ -201,12 +201,13 @@ sections:
         given.
       - A failed result lists known_errors, the entries of the error knowledge base that its text matches, each with its cause and
         fix. Follow them before you change anything. For an error none matches, read the whole knowledge base (SkillLookupTool, file
-        ERKB.yaml).
+        ERKB.yaml); for a failure with no message to match, such as a crash with no error line, lost particles or a geometry-debug
+        run, read openmc-execution/rules/troubleshooting.md.
       - Change one thing at a time, and say what and why.
       - After three failed attempts at the same error, stop. Tell the user what you tried and what each attempt showed, and ask how to go
         on.
-      - Lost particles mean a hole or an overlap in the geometry. Plot the slice through the position the log reports before running
-        again.
+      - Lost particles mean a hole or an overlap in the geometry. The warning names a surface, not a place; plot along that surface,
+        or through the point where a replayed particle file was lost, before running again.
       - Never delete or replace a run, a statepoint or a case that holds runs; the tools refuse it. A new case name is the way to try
         again.
 
