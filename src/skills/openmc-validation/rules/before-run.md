@@ -13,6 +13,8 @@ Derived from: the OpenMC 0.15.3 user's guide, troubleshooting and plots pages (M
    - the source: points sampled and found in cells (more than 95% outside is an error; fewer is a warning, or a note when the
      source has a fissionable or domain constraint);
    - overlaps: OpenMC's own overlap marking on slices through the middle and through the source;
+   - CAD files: touching volumes that hold two copies of a face instead of sharing one (not merged), read from the file's
+     triangles;
    - files `model.xml` names (missing, absolute, outside the case);
    - meshes that lie outside the geometry, and how fixed-source tallies are normalised.
 2. **It does not see:**
@@ -35,7 +37,8 @@ Derived from: the OpenMC 0.15.3 user's guide, troubleshooting and plots pages (M
    that remain, reporting the rest as "lies on a surface" (`working_examples/cad-geometry`, the teapot's flat top).
 7. **CAD overlaps with the implicit complement** usually mean touching volumes that were not imprinted and merged: no volume crosses
    another, and the fix is in the CAD export (`openmc-authoring/rules/cad-and-meshes.md`; `working_examples/cad-geometry`, "Using
-   the tokamak").
+   the tokamak"). The check then names the pairs of volumes. It matches faces triangle for triangle, so it cannot see touching
+   faces that were faceted apart; overlaps that remain in a file it finds merged are crossing volumes, or such faces.
 
 ## The parts of the model
 

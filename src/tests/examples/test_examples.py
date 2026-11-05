@@ -100,7 +100,9 @@ def _make(name, variant):
         # must find
         self.assertEqual(sorted({f["check"] for f in errors}), sorted(variant.get("check_errors", [])),
                          f"{name}/{variant['name']}: the model check found {[f['message'] for f in errors]}")
-        failed = [f"{c['result']}: {why}" for c, ok, why in out["verdicts"] if not ok]
+        for check, words in variant.get("check_says", {}).items():           # and says why
+            self.assertIn(words, " ".join(f["message"] for f in errors if f["check"] == check), f"{name}/{variant['name']}")
+        failed =[f"{c['result']}: {why}" for c, ok, why in out["verdicts"] if not ok]
         self.assertEqual(failed, [], f"{name}/{variant['name']}:\n{out['post_text']}")
     return test
 

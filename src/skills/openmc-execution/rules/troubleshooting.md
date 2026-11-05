@@ -62,7 +62,7 @@ message to match, and how to find a fault in the geometry.
     - its default, topological check reported 6 of the CAD pin's 21 surfaces unsealed, although every pin volume closed point for
       point and the pin's k matched its CSG twin.
 
-    A file that passes can still be unmerged (`openmc-validation/rules/before-run.md` 7).
+    A file that passes can still be unmerged; the model check finds that (`openmc-validation/rules/before-run.md` 7).
 
 ## Depletion
 

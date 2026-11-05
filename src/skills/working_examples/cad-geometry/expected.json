@@ -63,6 +63,9 @@
       "check_errors": [
         "overlaps"
       ],
+      "check_says": {
+        "overlaps": "touching volumes are not merged"
+      },
       "checks": [
         {
           "result": "leakage_half",

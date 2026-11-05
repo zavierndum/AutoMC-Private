@@ -11,7 +11,9 @@ expected.json:
                                                            "script": "run.py" (optional), "env": {NAME: VALUE} (optional;
                                                            "@example/" in a value is the example's folder), "check_errors":
                                                            ["overlaps", ...] (optional: the model check's errors a variant that
-                                                           shows a flawed model must give), "checks": [CHECK, ...]}]}
+                                                           shows a flawed model must give), "check_says": {CHECK_NAME:
+                                                           "words"} (optional: words those errors must say), "checks":
+                                                           [CHECK, ...]}]}
     CHECK: {"result": KEY, ...} with one of
         "equals": V                         the result is exactly V
         "expect": V, "n_sigma": N           |result - V| <= N * sqrt(sigma_result^2 + sigma^2); sigma (the reference's) default 0,

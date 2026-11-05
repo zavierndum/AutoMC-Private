@@ -317,5 +317,6 @@ def check_case(case):
     errors = [f for f in findings if f["severity"] == "error"]
     return {"case": case, "passed": not errors, "findings": findings, "summary": report.get("summary"),
             "facility_data": _case_label(folder),
-            "next": ("fix the errors in build.py and build again" if errors else
+            "next": ("fix the errors where each finding's fix says (build.py, or the CAD program for a CAD file) and build again"
+                     if errors else
                      "the model may be run: plan it with OpenMCRunStartTool (the user approves)")}

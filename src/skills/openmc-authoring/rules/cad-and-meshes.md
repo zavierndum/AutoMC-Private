@@ -10,7 +10,8 @@ for AutoMC from what the CAD and mesh examples met; arguments checked in the ins
    absolute paths unless `openmc.config["resolve_paths"]` is False, and the build tool keeps them relative.
 2. **A CAD model must be imprinted and merged:** where two volumes touch they share one surface. A file exported without it holds
    two copies of each touching face; DAGMC's implicit complement (the space outside every volume) then claims points inside the
-   volumes, and the model check marks overlaps although no volumes cross. `check_watertight` does not show this. The fix is in the
+   volumes, and the model check marks overlaps although no volumes cross. `check_watertight` does not show this; the model check
+   does: it reads each CAD file and names the touching volumes that hold two copies of a face, with their area. The fix is in the
    CAD export, not in `build.py`: tell the user (`working_examples/cad-geometry`, "Using the tokamak").
 
 ## In a model

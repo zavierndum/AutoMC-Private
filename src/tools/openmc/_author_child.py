@@ -246,6 +246,127 @@ def _available(xs_path):
     return names
 
 
+# ----------------------------------------------------------------------------------------------------------------------
+# CAD files. Where two volumes touch, DAGMC needs one face with a volume on each side (the volumes imprinted and merged before
+# faceting). A file exported without that holds two copies of the face, one per volume, and the implicit complement then claims
+# the points beside them, which OpenMC's plots and geometry debug report as overlaps although no volume crosses another.
+MERGE_FIX = ("imprint and merge the touching volumes in the CAD program before it facets them (in Cubit: imprint and merge), and "
+             "export the file again; build.py and OpenMC settings cannot repair it")
+
+
+def read_dagmc(path):
+    """The surfaces of a DAGMC file (MOAB's .h5m, read with h5py): (points (n, 3) in cm, triangles (m, 3) as rows of points, the
+    surface of each triangle (m,), {surface: (volume on its forward side, volume on its reverse side)} with 0 for none,
+    {volume: (its id, its material or None)}). Surfaces and volumes are keyed by their handles in the file."""
+    import h5py
+    import numpy as np
+
+    def text(v):
+        return bytes(v).split(b"\0")[0].decode(errors="replace")
+
+    with h5py.File(path, "r") as f:
+        t = f["tstt"]
+        points = t["nodes/coordinates"][()]
+        node0 = int(t["nodes/coordinates"].attrs["start_id"])
+        tri = t["elements/Tri3/connectivity"]
+        conn, tri0 = tri[()].astype(np.int64) - node0, int(tri.attrs["start_id"])
+        sets, set0 = t["sets/list"][()], int(t["sets/list"].attrs["start_id"])
+        contents = t["sets/contents"][()].astype(np.int64)
+        ids = t["sets/tags/GLOBAL_ID"][()] if "sets/tags/GLOBAL_ID" in t else None
+
+        def tag(name):
+            g = t["tags"].get(name)
+            return dict(zip(g["id_list"][()].tolist(), g["values"][()])) if g is not None and "id_list" in g else {}
+
+        dim, sense, name, category = tag("GEOM_DIMENSION"), tag("GEOM_SENSE_2"), tag("NAME"), tag("CATEGORY")
+
+    def contents_of(h):
+        i = h - set0
+        raw = contents[(int(sets[i - 1][0]) + 1 if i else 0):int(sets[i][0]) + 1]
+        if sets[i][3] & 0x8:                                    # stored as ranges: (first handle, count) pairs
+            raw = np.concatenate([np.arange(a, a + n) for a, n in raw.reshape(-1, 2)]) if len(raw) else raw
+        return raw
+
+    rows, surface_of, sides = [], [], {}
+    for h, d in dim.items():
+        if int(d) == 2:
+            c = contents_of(h)
+            c = c[(c >= tri0) & (c < tri0 + len(conn))] - tri0   # its triangles (a surface set may also hold edges and points)
+            rows.append(c)
+            surface_of.append(np.full(len(c), h, dtype=np.int64))
+            sides[h] = tuple(int(x) for x in sense.get(h, (0, 0)))
+    volumes = {h: [int(ids[h - set0]) if ids is not None else h, None] for h, d in dim.items() if int(d) == 3}
+    for h, c in category.items():
+        if text(c) == "Group" and text(name.get(h, b"")).startswith("mat:"):
+            for v in contents_of(h).tolist():
+                if v in volumes:
+                    volumes[v][1] = text(name[h])[4:]
+    rows = np.concatenate(rows) if rows else np.zeros(0, dtype=np.int64)
+    return (points, conn[rows], np.concatenate(surface_of) if surface_of else rows, sides,
+            {h: tuple(v) for h, v in volumes.items()})
+
+
+def duplicate_faces(points, triangles, surface_of, sides, tol=1e-4):
+    """Pairs of volumes that touch through two copies of a face: triangles of two surfaces on the same three points (to tol cm, in
+    any order). Returns ({(volume, volume): (copied triangles, their area in cm2)}, how many surfaces have a volume on each side)."""
+    import numpy as np
+    shared = sum(1 for a, b in sides.values() if a and b)
+    if not len(triangles):
+        return {}, shared
+    points = np.asarray(points, dtype=float)
+    _, node = np.unique(np.round(points / tol).astype(np.int64), axis=0, return_inverse=True)
+    key = np.sort(node.reshape(-1)[triangles], axis=1)       # each triangle as its three points, joined on their coordinates
+    order = np.lexsort(key.T[::-1])
+    key = key[order]
+    first = np.concatenate(([True], np.any(key[1:] != key[:-1], axis=1)))   # the first of each run of equal triangles
+    lead = order[np.flatnonzero(first)][np.cumsum(first) - 1]                 # for each, the first triangle of its run
+    copy, lead = order[~first], lead[~first]
+    a, b = surface_of[lead], surface_of[copy]
+    keep = a != b
+    if not keep.any():
+        return {}, shared
+    p = points[triangles[copy[keep]]]
+    area = 0.5 * np.linalg.norm(np.cross(p[:, 1] - p[:, 0], p[:, 2] - p[:, 0]), axis=1)
+    pair, which = np.unique(np.sort(np.stack([a[keep], b[keep]], axis=1), axis=1), axis=0, return_inverse=True)
+    which = which.reshape(-1)
+    counts, areas = np.bincount(which, minlength=len(pair)), np.bincount(which, weights=area, minlength=len(pair))
+    out = {}
+    for (s, u), n, A in zip(pair.tolist(), counts.tolist(), areas.tolist()):
+        for v in {x for x in sides.get(s, (0, 0)) if x}:
+            for w in {x for x in sides.get(u, (0, 0)) if x}:
+                if v != w:
+                    k = (min(v, w), max(v, w))
+                    old = out.get(k, (0, 0.0))
+                    out[k] = (old[0] + n, old[1] + A)
+    return out, shared
+
+
+def _from_case(path):
+    """A file's path from the case folder when it lies inside it (OpenMC made it absolute when it read model.xml)."""
+    try:
+        rel = os.path.relpath(path)
+    except ValueError:                                          # on another drive
+        return path
+    return path if rel.startswith("..") else rel
+
+
+def _area(cm2):
+    return f"{cm2 / 1e4:.3g} m2" if cm2 >= 1e4 else f"{cm2:.3g} cm2"
+
+
+def not_merged(path, pairs, volumes):
+    """The finding's text for a file whose touching volumes hold copies of their faces, the largest pairs first."""
+    def label(v):
+        vid, material = volumes.get(v, (v, None))
+        return f"{material} (volume {vid})" if material else f"volume {vid}"
+    top = sorted(pairs.items(), key=lambda kv: -kv[1][1])
+    named = "; ".join(f"{label(v)} and {label(w)}: {n:,} triangles, {_area(A)}" for (v, w), (n, A) in top[:3])
+    more = f"; and {len(top) - 3} more" if len(top) > 3 else ""
+    return (f"{path}: touching volumes are not merged: {len(pairs)} pair{'s' if len(pairs) > 1 else ''} of volumes touch through two "
+            f"copies of the same face ({sum(n for n, _ in pairs.values()):,} triangles), where DAGMC needs one face shared by both "
+            f"({named}{more})")
+
+
 def check(args):
     import numpy as np
     import openmc
@@ -346,7 +467,28 @@ def check(args):
             add("info" if constrained else "warning", "source",
                 f"{where}; OpenMC rejects such points and samples again, so the source is cut to the geometry",
                 None if constrained else "if the source should not be cut, move it inside the geometry or extend the geometry around it")
+    # CAD files: touching volumes must share their faces, or the implicit complement claims the points beside them
+    unmerged = []
+    if info["dagmc"]:
+        for path in sorted({str(u.filename) for u in g.get_all_universes().values() if type(u).__name__ == "DAGMCUniverse"}):
+            path = _from_case(path)
+            try:
+                cad = read_dagmc(path)
+                sides, volumes = cad[3], cad[4]
+                pairs, shared = duplicate_faces(*cad[:4])
+            except Exception as e:
+                add("warning", "CAD file", f"{path} could not be read for its touching volumes: {type(e).__name__}: {str(e)[:200]}",
+                    None)
+                continue
+            if pairs:
+                unmerged.append(not_merged(path, pairs, volumes))
+            else:
+                add("info", "CAD file", f"{path}: {len(volumes)} volumes and {len(sides)} surfaces, " +
+                    (f"{shared} of them between two volumes; no face is held twice, so touching volumes are merged" if shared else
+                     "none between two volumes, and no face is held twice: no two volumes touch, unless their faces were faceted "
+                     "apart"), None)
     # overlaps, by OpenMC's own plot mode through the source and the middle of the geometry
+    hits = 0
     try:
         import matplotlib
         matplotlib.use("Agg")
@@ -361,7 +503,7 @@ def check(args):
             plt.close(ax.figure)
             return n
 
-        hits, on_surfaces = 0, []
+        on_surfaces = []
         for v in views:
             n = hits_in(v)
             if not n:
@@ -375,15 +517,26 @@ def check(args):
                 hits += n
             else:
                 on_surfaces.append(f"{v['basis']} at {'xyz'[axis]} = {v['origin'][axis]:g} cm")
-        if hits:
-            add("error", "overlaps", f"{hits} pixels of {len(views)} slices fall in two cells at once", "find them with "
-                "OpenMCGeometryPlotTool (drawn red) and fix the regions in build.py")
+        seen = f"{hits} pixels of {len(views)} slices fall in two cells at once"
+        if hits and unmerged:
+            add("error", "overlaps", f"{seen}. {' '.join(unmerged)}. The implicit complement claims the points beside each copied face, "
+                "which reads as an overlap although no volume need cross another; overlaps still seen once the file is merged are "
+                "real", MERGE_FIX)
+        elif hits and info["dagmc"]:
+            add("error", "overlaps", seen, "find them with OpenMCGeometryPlotTool (drawn red). Overlaps among the CSG cells are fixed "
+                "in build.py; in the CAD file, volumes that cross, or touching volumes faceted apart (not matched here triangle for "
+                "triangle), are corrected in the CAD program and exported again")
+        elif hits:
+            add("error", "overlaps", seen, "find them with OpenMCGeometryPlotTool (drawn red) and fix the regions in build.py")
         if on_surfaces:
             add("info", "overlaps", f"the slice{'s' if len(on_surfaces) > 1 else ''} {'; '.join(on_surfaces)} lie{'' if len(on_surfaces) > 1 else 's'} "
                 "on a surface of the model: points exactly on it read as in two cells, but no overlap is there a little to either "
                 "side, so the cells do not overlap", None)
     except Exception as e:
         add("warning", "overlaps", f"the overlap check could not run: {type(e).__name__}: {str(e)[:200]}", None)
+    if unmerged and not hits:
+        add("warning", "CAD file", f"{' '.join(unmerged)}. The slices checked show no overlap, but the implicit complement may claim "
+            "points beside the copied faces", MERGE_FIX)
     # tallies
     ll, ur = _finite_box(model)
     for t in model.tallies:

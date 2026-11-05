@@ -79,9 +79,14 @@ inactive; teapot and tokamak 20 batches).
     cell and DAGMC's implicit complement (the space outside every volume).
   - Every marked point lies inside exactly one volume when tested against the file's own triangles. The second claimant is the
     implicit complement. The cause is the duplicate faces described in "Using the tokamak" below.
+  - The model check reads the file and says so: its overlap error names 25 pairs of touching volumes that are not merged, the
+    first wall and the blanket first (8,064 triangles, 119 m2).
   - The mirrored half and the quarter should be the same torus, but at the reference size their blanket fluxes differ by 1.8%, 6.1
-    combined standard deviations. The unmerged faces, or a model that is not mirror-symmetric about x = 0, would do that; which one
-    has not been checked. The comparison is therefore reported, not checked.
+    combined standard deviations. The model is mirror-symmetric about x = 0: the quarter on the other side (x <= 0) gives
+    117.34 ± 0.16 cm against 117.09 ± 0.29 cm (0.2%, 0.75 σ), and the mirrored half's blanket flux splits 57.62 ± 0.14 cm for
+    x < 0 against 57.45 ± 0.14 cm for x > 0. So the 2% comes with the reflecting plane at x = 0 cutting through the CAD volumes, not
+    with the model's shape. Whether the unmerged faces cause it needs a merged copy of the file, which has not been made. The
+    comparison is therefore reported, not checked.
 - **The teapot's check reported overlaps at first, in error.** The horizontal slice at z = 0 lies exactly on the water's flat top
   surface, where a point reads as in both cells. A slice 0.01 cm away shows nothing. The model check now tries each slice a little to
   either side, and reports such a slice as lying on a surface, not as an overlap.
@@ -121,8 +126,9 @@ one volume enters the implicit complement (void here) and must then meet the nei
 - run the model check, and `check_watertight -o check.h5m <file>.h5m`. Without `-o` the tool may write over its input file;
 - read `check_watertight` with care. It passes this unmerged tokamak. Its default (topological) check also reports 6 of the CAD
   pin's 21 surfaces unsealed, although every pin volume is closed point for point and its k matches the CSG twin;
-- if the check marks overlaps and `openmc -g` names the implicit complement, suspect touching volumes that were not merged before
-  suspecting volumes that cross;
+- the model check reads each CAD file and names the touching volumes that hold two copies of a face. It matches faces triangle for
+  triangle, so faces faceted apart escape it: if it finds the file merged but marks overlaps, and `openmc -g` names the implicit
+  complement, still suspect touching volumes that were not merged before suspecting volumes that cross;
 - the fix is in the CAD export: imprint and merge the volumes before faceting (for example with Cubit's imprint and merge [2]).
   OpenMC settings cannot repair it.
 

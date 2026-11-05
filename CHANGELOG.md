@@ -9,6 +9,19 @@ releases nothing is bumped by hand; a chat and an evaluation record the fingerpr
 The first package version (WD-1, `devops/AutoMC_Workspace_Plan.md`). It continues the TRIGA builder's own 0.7.0; the prompt's and the
 evaluation cases' own version lines are gone.
 
+- **Skills (AU-3 and AU-4, 2026-11-04 and 11-05, `devops/AutoMC_Authoring_Plan.md`):** rule files read on demand with
+  `SkillLookupTool`: 18 for authoring (one per part of a model) with build-script templates, 4 for validation (the review gate
+  before and after a run), troubleshooting (crashes, lost particles and their replay, geometry-debug runs, CAD files, depletion
+  hangs) and 5 for post-processing (statepoints, tally arrays and mesh order, spectra, derived numbers, depletion and multigroup
+  results). Every skill file is compared with the OpenMC manual, examples and notebooks, and fails at 12 shared words or 5 shared
+  code lines; facts the rules state about OpenMC 0.15.3 are tested against the installed package. `ERKB.yaml` left the prompt:
+  `agent/erkb.py` matches it against every failed tool result and adds `known_errors`; 15 new entries (23 in all), each
+  provoked from OpenMC in a test or saying why it cannot be. Corrected: a lost particle's file holds where its history started, not where it was lost (a replay finds
+  that point), and OpenMC's overlap message names cell ids. The model check now reads each CAD file the model names and finds
+  touching volumes that hold two copies of a face instead of sharing one: the cad-geometry tokamak's overlap error names its 25
+  pairs and says the fix is to imprint and merge in the CAD export, not in `build.py`. The tokamak was found mirror-symmetric about
+  x = 0, so the 2% between its mirrored half and its quarter comes with the reflecting plane at x = 0, not with its shape.
+
 - **The system prompt (PR-0 to PR-3, 2026-11-02, `devops/AutoMC_Prompt_Plan.md`):** a closed schema (keyed sections with channels
   `local` and `cloud`, and examples with the phrases their answers must and must not hold), loaded with a loader that refuses unknown
   keys, wrong types and a key given twice. Sixteen sections written from the code (authority and approvals, data labels, OpenMC

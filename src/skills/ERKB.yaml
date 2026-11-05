@@ -25,8 +25,9 @@
     merged: each holds its own copy of the shared face. The volumes need not cross, and check_watertight does not show it.
   suggestion: >
     Report both cells and their names. Do not patch the geometry silently: the fix belongs in the library or the builder, with a
-    record of its effect. Run openmc -g on the smallest model that shows it. For a CAD model whose overlap names the implicit
-    complement, say that the CAD export must imprint and merge the volumes, and point to the cad-geometry example's README
+    record of its effect. Run openmc -g on the smallest model that shows it. For a CAD model, read the model check first: it reads
+    each CAD file and names the pairs of touching volumes that hold two copies of a face. When it does, or the overlap names the
+    implicit complement, say that the CAD export must imprint and merge the volumes, and point to the cad-geometry example's README
     ("Using the tokamak").
   confidence: high
   origin: seen
