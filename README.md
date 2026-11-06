@@ -1,7 +1,8 @@
 # AutoMC
 
 An AI agent for OpenMC that builds, checks and runs Monte Carlo models with your approval, then explains the results and errors,
-using local or cloud language models.
+using local or cloud language models. It writes a model as a Python build script from your description, starting from the nearest of
+29 working examples, draws and checks it before anything runs, and starts a run only when you approve it.
 
 Version 0.8.0, not released. This is the development repository.
 

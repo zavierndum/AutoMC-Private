@@ -5,7 +5,8 @@ session so far, and the questions still open. Everything marked *decided* was ag
 Zavier and the assistant in conversation; everything marked *open* is not yet settled. This file
 is the thing to argue against before code is written. `HANDOFF.md` is the briefing that preceded
 it; `SETUP.md` is the environment; `TRIGA-Model/SCOPING.md` is the model-building path and the
-validated runs.
+validated runs. Section 8 (writing a model, and diagnosis), the milestones and the repository layout were brought up to the code on
+2026-11-06; other sections carry their own dates where they changed.
 
 ## Table of Contents
 - [1. What AutoMC is](#1-what-automc-is)
@@ -15,7 +16,7 @@ validated runs.
 - [5. Execution layer: the OpenMC worker](#5-execution-layer-the-openmc-worker)
 - [6. Workspace layout and job registry](#6-workspace-layout-and-job-registry)
 - [7. The agent turn: interrupt, edit, resume](#7-the-agent-turn-interrupt-edit-resume)
-- [8. Diagnosis and self-healing](#8-diagnosis-and-self-healing)
+- [8. Writing a model, and diagnosing failures](#8-writing-a-model-and-diagnosing-failures)
 - [9. Delegation to peer agents](#9-delegation-to-peer-agents)
 - [10. User interfaces](#10-user-interfaces)
 - [11. Constraints that shape the design](#11-constraints-that-shape-the-design)
@@ -228,27 +229,129 @@ idle -> running -> (completed | interrupted | failed)
         paused  --(edit state)--> running
 ```
 
-## 8. Diagnosis and self-healing
+## 8. Writing a model, and diagnosing failures
 
-Ported from AutoFLUKA, with the OpenMC specifics filled in:
+Both parts were written from the code on 2026-11-06; the files are named where each claim is made.
 
-- **Deterministic fatal-signature detector** over `run.log` and `particle_*.h5` presence.
-  OpenMC's source has about 260 distinct `fatal_error(...)` strings and the troubleshooting guide
-  names the runtime classics: lost particles beyond the cap, "OpenMC aborted unexpectedly"
-  (segfault), no `cross_sections.xml`, HDF5 file lock on `summary.h5`. The signature list and the
-  first version of the knowledge base are generated from the source tree, then curated.
-- **Error knowledge base** in Markdown with the AutoFLUKA record shape (detection hint, signature,
-  typical cause, suggested fix, confidence, source) and the same TF-IDF plus fuzzy matcher.
-- **Attempt ladder.** A failed attempt is diagnosed in place; a fix always produces a new
-  `run-N+1` with `derived_from` set. Anti-loop rules: a bounded number of automatic attempts per
-  case, never two automatic attempts with an identical `model.xml` hash, and never a new
-  production folder while one has artifacts and the user has not asked.
-- **Fix notes** appended to one `automc_run_fixes.md` per case, and real bugs found in OpenMC,
-  CoreForge, MPACTPy or `progression_problems` go to `known_issues.md` / `FIXES.md` in this
-  directory, using the Control Room Agent project's convention.
-- **Convergence failures are diagnoses too**: entropy not flattened within the inactive batches,
-  sigma target not reached, k-eff drifting. These produce a "non_converged" status and a
-  suggested settings change, not a crash signature.
+### 8.1 Writing a model
+
+The NETL TRIGA has its own builder (`TRIGAInputBuilderTool`, section 1). For any other model the agent writes a Python build script,
+`build.py`, with the OpenMC Python API, the way OpenMC is meant to be used, and the tools below build, draw and check it
+(`src/tools/openmc/authoring.py`, `_author_child.py`, `authoring_tools.py`).
+
+1. **Build** (`OpenMCModelBuildTool`). The tool only plans: the user sees the script and approves it.
+   - The script's text is refused when it would run transport or start a program: `.run(`, `run_in_memory`, `search_for_keff`,
+     `.integrate(`, stepping `openmc.lib` through batches, `subprocess`, `os.system` (`authoring.py:53`). The refusal says that
+     transport is started by `OpenMCRunStartTool` after the user's approval.
+   - The build process also replaces those functions with ones that refuse, in case a script reaches them another way
+     (`_author_child.py`, `disarm`).
+   - The script runs in a staging folder beside the case, as `python -I` (no AutoMC modules, no user site), without keys, within a
+     time limit (300 s by default, at most 1,800). Only a build that wrote `model.xml` becomes the case, so a failed build leaves
+     nothing behind.
+   - The case gets `model.xml`, `build.py`, `build.log` and `result.json` (the script's SHA-256, the versions, the approval, the data
+     label). A case that has runs is never rebuilt (`authoring.py:114`).
+2. **Draw** (`OpenMCGeometryPlotTool`): slices through OpenMC's plot mode (no transport), coloured by material or by cell, with the
+   source marked and overlaps drawn red.
+3. **Check** (`OpenMCModelCheckTool`, `_author_child.py:370`): the model read back from `model.xml`, before any run.
+   - The files it names (CAD geometries, meshes): missing, outside the case, or named by an absolute path.
+   - Nuclear data: nuclides and thermal scattering tables the library lacks, or a multigroup library that is not there.
+   - Materials that mix atom and weight fractions.
+   - Settings: too few inactive batches, an eigenvalue run with no fissionable material, a fixed-source run with no source, too few
+     histories.
+   - Boundaries: no vacuum surface.
+   - The source: sampled points that are in no cell.
+   - Overlaps, through OpenMC's plot mode on the default slices and through two source points. A slice lying exactly on a surface of
+     the model is told apart from a real overlap by moving it a little each way.
+   - CAD files: touching volumes that hold two copies of a face instead of sharing one (not merged). The implicit complement then
+     claims the points beside each copied face, which reads as an overlap although no volume crosses another; the finding names the
+     pairs and puts the fix in the CAD export.
+   - Tallies: a mesh outside the geometry and, for a fixed source, how the tallies are normalised.
+
+   The model passes only without errors, and each finding says where its fix goes (`build.py`, or the CAD program for a CAD file).
+4. **Run** through the job service (sections 5 and 6), after the user's approval. Work that runs transport from inside Python (a
+   criticality search, a depletion, a loop over `openmc.lib`) is a **script run**: `OpenMCRunStartTool` with the case and the text of
+   `run.py`, approved like any run.
+   - It runs in a new run folder holding a copy of the case's files, as its own process group, without keys, within a time limit (an
+     hour by default, at most a day) (`src/tools/openmc/script_worker.py`, `runs.py:49`).
+   - It can be stopped or cancelled, not paused, and it does not continue from a statepoint: it is planned again.
+5. **Read** the result (`RunResultReaderTool`) and analyse it with `PythonRunTool`, as each example's `post.py` does.
+
+**What the agent is told, and what it reads when it needs it** (`src/skills/SKILL_POLICY.md`, `src/agent/prompt.py`):
+- **In the prompt:**
+  - the system prompt (`src/prompts/system_prompt_automc.yml`). Its section "Writing a model" gives the order above. Its first step is
+    to ask, in one message, for what the question leaves open, or to choose a standard value and call it an assumption;
+  - `src/skills/index.md`, and every bundled skill's `SKILL.md`.
+
+  The prompt is sized for a 128k-token context.
+- **On demand,** with `SkillLookupTool` and a path under `src/skills` (`agent/skill_tool.py`):
+  - the rule files: 18 for authoring (one per part of a model) with build-script templates, 4 for validation (the review before and
+    after a run), the troubleshooting rules, and 5 for post-processing;
+  - the error knowledge base (section 8.2);
+  - the working examples.
+- **The working examples** (`src/skills/working_examples/`, 29, listed in its `index.md`). Each has:
+  - a README with its source;
+  - `build.py`, with an `OPTIONS` line for its variants, or `analysis.py` for nuclear data processed without a model;
+  - `expected.json`, the checks its results must pass;
+  - `post.py`, when it has results.
+
+  The agent starts from the nearest example and says which one it adapted. Five of them need files AutoMC does not ship (CAD
+  geometries, meshes, ENDF and multipole files). `data.json` lists each file with its source and SHA-256, and `python -m automc data
+  fetch` puts them in the data cache (`src/tools/openmc/example_data.py`; SETUP.md section 7k).
+
+**How it is tested:**
+- **`src/tests/skills/`:**
+  - the skill files hold together (`test_skill_files.py`);
+  - nothing in the skills or the prompt is copied from OpenMC's documentation, examples or notebooks (`test_originality.py`);
+  - what the troubleshooting and post-processing rules say about OpenMC is checked against the installed package
+    (`test_rule_facts.py`).
+- **The slow tier** (`AUTOMC_SLOW_TESTS=1`, WSL with OpenMC; `src/tests/examples/`). Every variant of every example is built through
+  the build tool, checked, run through the job service, and its results compared with its `expected.json`. On 2026-11-05: 42 tests,
+  417 s.
+- **The evaluation cases** (`src/evals/cases.yml`, 47).
+  - Eight take this path from a description to its result: a dose question that leaves the source and the dose quantity open, a
+    benchmark and a fixed-source run read back after they finish, a hexagonal lattice drawn, a build script that tries to run
+    transport, a run that lost particles, and a CAD model that is not merged.
+  - The harness waits for a run between turns, as a user would, while the agent never waits (`src/agent/evals.py`).
+  - Not yet put to the local and cloud models.
+
+### 8.2 Diagnosis
+
+The design of 2026-10-14 ported AutoFLUKA's diagnosis: a detector of fatal signatures, a Markdown knowledge base with a TF-IDF and
+fuzzy matcher, an attempt ladder and fix notes. What exists:
+
+- **The error knowledge base** is `src/skills/ERKB.yaml`, in AutoSAM's ERKB format. It has 23 entries, each with:
+  - `detection_hint`, a substring of a log or an error message;
+  - `signature`, `background`, `suggestion` and `confidence`;
+  - `origin`: 21 were met in this project, 2 come from OpenMC's source or documentation.
+
+  There is no TF-IDF or fuzzy matching: an entry matches when its hint occurs in the text.
+- **It is matched in code, against every failed result.** Every tool call passes through `agent/erkb.py` (`src/tools/registry.py:43`).
+  - A result that reports a failure (ok false, a failed job or Python run, a failed build or check) gets `known_errors`: the signature,
+    suggestion and confidence of each entry whose hint occurs in its text. The end of a long log is searched too.
+  - A known error is thus recognised every time, not left to the model's memory.
+  - The file itself is not in the prompt; the model reads it on demand.
+  - The slow tier provokes each message it can and checks that its hint is still in what OpenMC, h5py or NumPy write
+    (`src/tests/skills/test_erkb_messages.py`). An upgrade that changes a message fails a test, not a user's run.
+- **The model check** (section 8.1) finds, before a run, what would make the run fail or give wrong numbers without failing.
+- **The troubleshooting rules** (`src/skills/openmc-execution/rules/troubleshooting.md`, read on demand) cover what has no message to
+  match:
+  - crashes with no error line;
+  - lost particles. A particle file holds where its history started, not where it was lost; a script run replays it to find that
+    place;
+  - geometry-debug runs and how far they reached;
+  - checks of CAD files, and depletions that hang.
+
+  Convergence is judged from k by batch and the Shannon entropy (`src/skills/openmc-validation/rules/convergence.md`).
+
+Still plans, not built:
+- **The attempt ladder.**
+  - A fix is a new build by the agent, approved by the user like any other; since a case with runs is never rebuilt, a fixed model
+    that has been run is a new case.
+  - Nothing yet counts automatic attempts or compares the `model.xml` hashes of attempts.
+  - A job's `derived_from` is written empty (`src/tools/openmc/runs.py:452`).
+- **Fix notes** per case (`automc_run_fixes.md`), and the `known_issues.md` / `FIXES.md` record of bugs found in OpenMC, CoreForge,
+  MPACTPy or `progression_problems`.
+- **A `non_converged` status.** It is in the list of statuses (`src/tools/openmc/jobs.py:33`), but no code sets it.
 
 ## 9. Delegation to peer agents
 
@@ -386,9 +489,14 @@ keyword list becomes the baseline. This ties to the NuclearBench methodology.
   through 4E from the existing scripts as managed jobs; pause, resume, stop, kill all working;
   startup reconciliation working. No LLM involved yet.
 - **M1, agent** (built 2026-10-25 as Block 5 phase B5-3: LangGraph core, approval interrupt, data guard, CLI chat,
-  evaluation set; the progression-problem builders and the diagnosis detector are not done): turn manager with interrupt/edit/resume; start/check/pause/resume/cancel as
+  evaluation set; the progression-problem builders are not done, and the knowledge base has been matched in code since 2026-11-04,
+  section 8.2): turn manager with interrupt/edit/resume; start/check/pause/resume/cancel as
   tools; model-building tools over `progression_problems`; run problem 5 as the first
   agent-managed run; diagnosis detector and knowledge base seeded from source.
+- **Authoring** (built 2026-11-01 to 11-06, section 8.1): any OpenMC model from a build script, built, drawn and checked before a run;
+  script runs; 29 working examples, each tested in the slow tier, with the data five of them need; rule files read on demand; the
+  error knowledge base matched against every failed result; 47 evaluation cases. Next: the cases put to the local and cloud models,
+  and the prompt measured against a 128k context.
 - **M2, surfaces**: React UI with jobs panel and run monitor; OpenAI shim; MCP tool server;
   artifact schema v1.
 - **M3, delegation**: handoff module, catalog, classifier, permission gate, staged prompts for requests from peers (section 9.1), AutoMC agent card,
@@ -421,22 +529,31 @@ Claims above were checked against code on 2026-10-14, not taken from docs or mem
 
 ## 15. Repository layout
 
-Decided 2026-10-15, revised 2026-10-25 (Block 5 plan, sections 5a and 5b). Our code is organized by what it does; other people's
-code sits in one separate folder; facility data that may not be published sits outside the repository. Run outputs are kept apart
-from code.
+Decided 2026-10-15, revised 2026-10-25 (Block 5 plan, sections 5a and 5b), brought up to date 2026-11-06. Our code is organized by
+what it does; other people's code sits in one separate folder; facility data that may not be published sits outside the repository.
+Run outputs are kept apart from code.
 
 ```
 AutoMC/
-  DESIGN.md  HANDOFF.md  SETUP.md  TACC.md       docs
-  src/        automc.py (python -m automc), automc_paths.py, tools/ (openmc/, reactors/triga/, registry.py), facility_packs/
-              (public packs only), skills/, frontend/, tests/ ; later automc_core.py, api.py
+  README.md  DESIGN.md  TOOLS.md  SETUP.md  CHANGELOG.md  HANDOFF.md  TACC.md   docs
+  src/        automc.py (python -m automc), automc_core.py (the agent), automc_paths.py, automc_settings.py,
+              automc_workspace.py, automc_version.py, console.py,
+              agent/ (models, prompt, guard, keys, the error knowledge base's matcher, evaluations),
+              tools/ (openmc/, reactors/triga/, files/, documents/, web/, python/, chats/, memory/, registry.py),
+              prompts/, skills/ (skills, rule files, working examples, ERKB.yaml), evals/ (the cases), config/,
+              facility_packs/ (public packs only), tests/, frontend/ (empty) ; later api.py
+  Dockerfile  docker-compose.yml  docker-compose.netl.yml  docker/   the container and the check every image passes
   library_snapshots/  pinned copies of CoreForge and progression_problems, their public patches, make_snapshots.py
   workspace/  all run outputs (case folders, run-001, registry); never beside source
+  devops/     plans, validation notes and their outcomes; never published as is
   external/   material received from others, kept as received (branko/)
   references/ the two NETL PDFs
   TRIGA-Model/  progression-problem run scripts, results and RUNNING.md: the validation record so far
   Learning/ openmc-notebooks/ openmc-reference/ scripts/ downloads/   unchanged
 ```
+
+Outside the repository: the nuclear data, the working examples' data cache (`AUTOMC_DATA_CACHE`, else `~/.cache/automc/data`), the
+restricted facility packs and the keys file.
 
 See `src/README.md` for what each source folder is for and its current state.
 

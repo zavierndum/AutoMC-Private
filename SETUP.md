@@ -550,7 +550,7 @@ container every run asks, whatever the settings say. The container runs as an or
 
 ## 7k. Data for the working examples (2026-11-02, AU-2 batch 5)
 
-Six working examples need files AutoMC does not ship: CAD geometries (DAGMC `.h5m`), tetrahedral meshes, two ENDF/B-VIII.0 files and a
+Five working examples need files AutoMC does not ship: CAD geometries (DAGMC `.h5m`), tetrahedral meshes, two ENDF/B-VIII.0 files and a
 windowed multipole file. `src/skills/working_examples/data.json` lists each with its source and SHA-256. Fetch them once (the network
 is needed; 184 MB on disk, 103 MB of it one CAD model):
 
@@ -565,6 +565,19 @@ They go to the data cache: `AUTOMC_DATA_CACHE`, else `~/.cache/automc/data`. A f
 ENDF files are read out of NNDC's 310 MB archive by range requests, about 0.8 MB. An example copies what it needs into its case, so
 every run folder carries it; one whose file is missing says which `data fetch` to run. The Docker image does not hold them: mount the
 cache and set `AUTOMC_DATA_CACHE` to the mount.
+
+**The slow tests.** The ordinary suite checks that every example is complete. The slow tier also builds every variant of every
+example through the build tool, checks it, runs it through the job service and compares its results with its `expected.json`, and it
+provokes the OpenMC messages the error knowledge base knows, so a hint an upgrade changed fails here (WSL, with OpenMC):
+
+```bash
+cd ~/AutoMC/src
+python -m automc data fetch                       # first: an example whose files are not in the cache fails, it is not skipped
+AUTOMC_SLOW_TESTS=1 python -m unittest tests.examples.test_examples tests.skills.test_erkb_messages
+```
+
+On 2026-11-05 it was 42 tests in 417 s, with 4 threads per run (`AUTOMC_EXAMPLE_THREADS`, default 4). Run it after a change to an
+example, a rule it tests or OpenMC; `AUTOMC_SLOW_TESTS=1` with `discover` runs it with the rest of the suite.
 
 ## 8. Directory layout reference
 
