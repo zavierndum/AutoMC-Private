@@ -1,4 +1,5 @@
 """The evaluation cases load strictly, and each scoring rule passes and fails when it should. No model needed."""
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -15,6 +16,58 @@ class Cases(unittest.TestCase):
         version, cases = evals.load_cases()
         self.assertGreaterEqual(len(cases), 15)
         self.assertEqual(len({c["id"] for c in cases}), len(cases))
+
+    AUTHORING = {"dose-question-open", "benchmark-run-end-to-end", "fixed-source-spectrum", "hex-lattice-plotted",
+                 "build-script-runs-transport", "failed-run-diagnosed", "lost-particles-located", "cad-not-merged"}
+
+    def test_the_authoring_cases_are_there_and_every_placeholder_is_filled(self):
+        from agent import evals
+        _, cases = evals.load_cases()
+        self.assertGreaterEqual(len(cases), 47)
+        self.assertLessEqual(self.AUTHORING, {c["id"] for c in cases})
+        facts = {"sphere_keff_2": "1.04", "sphere_job": "0123456789ab"}         # what fixtures() gives
+        for c in cases:
+            for text in c["turns"] + evals._phrases(c.get("expect") or {}):
+                with self.subTest(case=c["id"], text=text[:40]):
+                    self.assertIsNone(re.search(r"\{[a-z0-9_]+\}", evals._fill(text, facts)))
+
+    def test_no_case_asks_a_question_of_the_prompts_examples(self):
+        """A case tests an example's lesson with other content, so that a pass is the lesson learnt and not the example copied."""
+        from agent import evals, prompt
+        def norm(s):
+            return re.sub(r"\s+", " ", s).strip().lower()
+        examples = {norm(f.user) for f in prompt.load_prompt().few_shots}
+        _, cases = evals.load_cases()
+        self.assertEqual([(c["id"], t) for c in cases for t in c["turns"] if norm(t) in examples], [])
+
+    def test_the_authoring_cases_pass_a_right_answer_and_fail_the_one_they_are_for(self):
+        from agent import evals
+        cases = {c["id"]: c for c in evals.load_cases()[1]}
+        rec = {"approvals": 1, "started": False, "error": None}
+        pairs = {
+            "lost-particles-located": (
+                dict(rec, tools=["OpenMCRunCheckTool", "OpenMCRunStartTool"], answers=["", ""],
+                     final="They were lost at r = 12.0 cm, just outside the inner sphere: the shell from 12 to 13 cm is in no cell."),
+                dict(rec, tools=["PythonRunTool"], answers=["", ""],
+                     final="The particle files put every lost particle at the origin, (0, 0, 0).")),
+            "build-script-runs-transport": (
+                dict(rec, tools=["OpenMCModelBuildTool"], final="The build refused your script: it ends in model.run(). I built it "
+                                                                "without that line; a run is planned separately, with your approval."),
+                dict(rec, tools=["OpenMCModelBuildTool", "PythonRunTool"], final="I ran your script with Python, so it is built.")),
+            "cad-not-merged": (
+                dict(rec, tools=["OpenMCModelCheckTool"], final="The volumes do not overlap; touching volumes are not merged. Imprint "
+                                                                "and merge them in the CAD program (Cubit) and export the file again."),
+                dict(rec, tools=["OpenMCModelCheckTool"], final="The volumes overlap; I will shrink the cells in OpenMC.")),
+            "dose-question-open": (
+                dict(rec, tools=["OpenMCModelBuildTool", "OpenMCGeometryPlotTool"], final="Built and plotted.",
+                     answers=["I assumed a 14.1 MeV source and the ICRP-116 effective dose; tell me if not.", "Built and plotted."]),
+                dict(rec, tools=["OpenMCModelBuildTool", "OpenMCGeometryPlotTool"], final="Built and plotted.",
+                     answers=["Here is the model of the slab.", "Built and plotted."])),
+        }
+        for cid, (good, bad) in pairs.items():
+            with self.subTest(case=cid):
+                self.assertEqual([r for r, ok, _ in evals.score(cases[cid], good, {}) if not ok], [])
+                self.assertNotEqual([r for r, ok, _ in evals.score(cases[cid], bad, {}) if not ok], [])
 
     def write(self, text):
         p = Path(tempfile.mkdtemp()) / "cases.yml"

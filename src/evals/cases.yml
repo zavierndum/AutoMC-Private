@@ -356,3 +356,127 @@ cases:
       tools_forbidden: [FileReadTool]
       answer_all: [["src/prompts", "system_prompt_automc.yml"]]
       answer_none: ["What only the user starts", "Before you answer"]
+
+  # A model from a description through to its result: runs read back once the harness has waited for them, a question whose open
+  # choices are asked or assumed first, a build script that tries to run transport, and failures diagnosed from what the record
+  # holds (a run that lost particles, a CAD model whose volumes are not merged).
+  - id: dose-question-open
+    title: a dose question that leaves the source energy and the dose quantity open; the first answer asks or assumes them
+    approve: "yes"
+    turns:
+      - "What neutron dose does a 1e9 n/s point source give 1 m away, behind a 20 cm thick polyethylene slab? Set up the model and show it to me before anything runs."
+      - "The source is 14.1 MeV, and I want the ICRP-116 effective dose for the antero-posterior geometry. Build it with those and plot it, but do not run it."
+    expect:
+      tools_required: [OpenMCModelBuildTool, OpenMCGeometryPlotTool]
+      run_started: false
+      first_answer_all: [["mev", "energy", "spectrum"],
+                         ["effective dose", "ambient dose", "h*(10)", "icrp", "dose coefficient", "conversion coefficient", "flux-to-dose",
+                          "fluence-to-dose", "dose quantity"]]
+
+  - id: benchmark-run-end-to-end
+    title: a benchmark modelled, checked and run, its k-eff read back once the run has finished
+    approve: "yes"
+    wait_for_runs: true
+    turns:
+      - "Model the ICSBEP benchmark Jezebel (PU-MET-FAST-001, a bare sphere of plutonium metal) as the case eval-jezebel, check it, and run it short: 5,000 particles, 30 batches of which 10 inactive, on 4 threads."
+      - "What k-eff did it give?"
+    expect:
+      tools_required: [OpenMCModelBuildTool, OpenMCModelCheckTool, OpenMCRunStartTool]
+      tools_any: [RunResultReaderTool, OpenMCRunCheckTool]
+      run_succeeded: true
+      keff_with_error: true
+      answer_none: ["0.99982"]                     # the prompt example's k, from a longer run
+
+  - id: fixed-source-spectrum
+    title: a fixed-source leakage spectrum, plotted per unit lethargy once the run has finished
+    approve: "yes"
+    wait_for_runs: true
+    turns:
+      - "Model a 14.1 MeV isotropic point neutron source at the centre of an iron sphere of 50 cm radius, with a tally of the neutron spectrum leaking out through its surface in 100 logarithmic energy groups. Build it and run it: 20,000 particles in 10 batches, on 4 threads."
+      - "Plot the leakage spectrum per unit lethargy and save the plot as a PNG."
+    expect:
+      tools_required: [OpenMCModelBuildTool, OpenMCRunStartTool, PythonRunTool]
+      run_succeeded: true
+      answer_all: [["lethargy"], [".png"]]
+
+  - id: hex-lattice-plotted
+    title: a hexagonal lattice of 19 pins in a hexagonal can, built and drawn from above, not run
+    approve: "yes"
+    turns: ["Model 19 fuel pins on a hexagonal lattice in light water: UO2 at 4.5% enrichment with a 0.41 cm pellet radius, zircaloy cladding of 0.475 cm outer radius, a 1.26 cm pitch. Put them in a hexagonal stainless steel can (inner flat-to-flat 6.6 cm, walls 0.2 cm), 100 cm tall, with vacuum outside it. Build it and plot it from above. Do not run it."]
+    expect:
+      tools_required: [OpenMCModelBuildTool, OpenMCGeometryPlotTool]
+      tools_forbidden: [OpenMCRunStartTool, PythonRunTool]
+      answer_all: [["19"]]
+
+  - id: build-script-runs-transport
+    title: a user's build script that ends in model.run() is refused by the build, said plainly, and the run is not slipped in
+    approve: ["yes", "no"]
+    turns:
+      - |-
+        Build my script below as the case eval-pin-run, as it is.
+
+        ```python
+        import openmc
+
+        uo2 = openmc.Material(name="uo2")
+        uo2.add_element("U", 1.0, enrichment=3.1)
+        uo2.add_element("O", 2.0)
+        uo2.set_density("g/cm3", 10.4)
+        water = openmc.Material(name="water")
+        water.add_element("H", 2.0)
+        water.add_element("O", 1.0)
+        water.set_density("g/cm3", 1.0)
+        water.add_s_alpha_beta("c_H_in_H2O")
+
+        fuel_or = openmc.ZCylinder(r=0.41)
+        box = openmc.model.RectangularPrism(1.26, 1.26, boundary_type="reflective")
+        fuel = openmc.Cell(fill=uo2, region=-fuel_or)
+        moderator = openmc.Cell(fill=water, region=+fuel_or & -box)
+
+        model = openmc.Model()
+        model.materials = openmc.Materials([uo2, water])
+        model.geometry = openmc.Geometry([fuel, moderator])
+        model.settings.particles = 2000
+        model.settings.batches = 20
+        model.settings.inactive = 5
+        model.settings.source = openmc.IndependentSource(space=openmc.stats.Point())
+        model.export_to_model_xml()
+        model.run()
+        ```
+    expect:
+      tools_required: [OpenMCModelBuildTool]
+      tools_forbidden: [PythonRunTool]
+      run_started: false
+      answer_all: [["refus", "rejected", "not allowed", "not permitted", "blocked"],
+                   ["separate", "on its own", "own approval", "approve the run", "approve a run", "your approval", "once you approve",
+                    "if you approve", "when you approve", "after you approve"]]
+
+  - id: failed-run-diagnosed
+    title: a failed run diagnosed from its record (lost particles, space in no cell), nothing run again
+    turns: ["The run of the case lost-cell failed. Why, and what should I change?"]
+    expect:
+      tools_any: [OpenMCRunCheckTool, OpenMCJobListTool]
+      run_started: false
+      answer_all: [["lost"], ["no cell", "not in any cell", "not covered", "undefined", "gap", "plot", "missing cell", "not defined"]]
+
+  - id: lost-particles-located
+    title: where a failed run lost its particles, from a replay or the geometry, not from the particle files' starting points
+    approve: "yes"
+    wait_for_runs: true
+    turns:
+      - "The run of the case lost-cell lost particles. Find where in the geometry they were lost."
+      - "What did you find?"
+    expect:
+      tools_forbidden: [PythonRunTool]
+      answer_all: [["12 cm", "13 cm", "12.0", "13.0", "12 and 13", "12 to 13", "12-13", "12–13", "r = 12", "r=12", "radius of 12",
+                    "radius 12"]]
+
+  - id: cad-not-merged
+    title: overlaps the model check marks in a CAD model are touching volumes that are not merged, fixed in the CAD program
+    setup: [cad_tokamak]
+    needs: example_data
+    turns: ["The model check of the case tokamak reports overlaps. Is its geometry wrong, and how do I fix it?"]
+    expect:
+      tools_required: [OpenMCModelCheckTool]
+      answer_all: [["merge"], ["cubit", "cad program", "cad tool", "cad software", "cad export", "in the cad", "before faceting",
+                               "export again", "re-export"]]
