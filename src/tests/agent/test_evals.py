@@ -43,6 +43,23 @@ class Cases(unittest.TestCase):
                 with self.assertRaises(evals.CaseError):
                     evals.load_cases(self.write(bad))
 
+    def test_waits_first_answers_and_example_data_load_and_their_typos_are_refused(self):
+        from agent import evals
+        good = ("cases:\n  - {id: a, title: t, turns: [x, y], wait_for_runs: true, expect: {run_succeeded: true, "
+                "first_answer_all: [[MeV, energy]]}}\n  - {id: b, title: t, turns: [x], setup: [cad_tokamak], needs: example_data}\n")
+        self.assertEqual([c["id"] for c in evals.load_cases(self.write(good))[1]], ["a", "b"])
+        for bad in ("cases:\n  - {id: a, title: t, turns: [x, y], wait_for_runs: often}\n",
+                    "cases:\n  - {id: a, title: t, turns: [x, y], expect: {run_succeeded: true}}\n",      # scored while still running
+                    "cases:\n  - {id: a, title: t, turns: [x, y], wait_for_runs: true, expect: {run_succeeded: done}}\n",
+                    "cases:\n  - {id: a, title: t, turns: [x], expect: {first_answer_all: [MeV]}}\n",
+                    "cases:\n  - {id: a, title: t, turns: [x], setup: [cad_tokamak]}\n",                     # says nothing of the data
+                    "cases:\n  - {id: a, title: t, turns: [x], needs: example_data}\n",                       # and no setup reads any
+                    "cases:\n  - {id: a, title: t, turns: [x], needs: some_pack}\n",
+                    "cases:\n  - {id: a, title: t, turns: [x], needs: restricted_pack, expect: {first_answer_all: [['2.95']]}}\n"):
+            with self.subTest(bad=bad[:70]):
+                with self.assertRaises(evals.CaseError):
+                    evals.load_cases(self.write(bad))
+
 
 @unittest.skipUnless(HAVE_YAML, "needs PyYAML")
 class PackAnswers(unittest.TestCase):
@@ -186,6 +203,151 @@ class Scoring(unittest.TestCase):
 
     def test_an_exception_fails_the_case(self):
         self.assertFalse(all(self.rules({}, error="RuntimeError: boom").values()))
+
+    def test_run_succeeded(self):
+        self.assertTrue(all(self.rules({"run_succeeded": True}, succeeded=True, ended=["success"]).values()))
+        self.assertFalse(all(self.rules({"run_succeeded": True}, succeeded=False, ended=["failed"]).values()))
+        self.assertFalse(all(self.rules({"run_succeeded": True}).values()))                 # no run at all
+        self.assertTrue(all(self.rules({"run_succeeded": False}).values()))
+
+    def test_the_first_answer_is_scored_on_its_own(self):
+        """A dose question's lesson is in the first answer: the energy and the dose quantity asked for or assumed, before the user
+        gives them in the next turn (and the last answer repeats them anyway)."""
+        expect = {"first_answer_all": [["MeV", "energy"]], "answer_all": [["built"]]}
+        self.assertTrue(all(self.rules(expect, answers=["Which source energy?", "I built it."], final="I built it.").values()))
+        self.assertFalse(all(self.rules(expect, answers=["I built it.", "I built it at 14.1 MeV."], final="I built it at 14.1 MeV.").values()))
+        self.assertFalse(all(self.rules(expect, final="I built it.").values()))             # no answers recorded
+
+
+def _can_import_runs():
+    try:
+        from tools.openmc import jobs, runs  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+@unittest.skipUnless(HAVE_YAML and _can_import_runs(), "needs PyYAML and the job service's modules")
+class Turns(unittest.TestCase):
+    """The harness's turn loop with a made-up session: when it waits for runs, and what it records of them. No model, no OpenMC."""
+
+    class FakeSession:
+        log = []
+
+        def __init__(self, provider=None, surface=None):
+            self.n = 0
+
+        def send(self, text):
+            self.n += 1
+            self.log.append(("send", text))
+            return [("tool_call", "OpenMCRunStartTool"), ("final", f"answer {self.n}")]
+
+        def spent(self):
+            return 0
+
+    def run_case(self, case, jobs=(), status="success"):
+        import sys
+        import types
+        from unittest import mock
+        import automc_paths
+        from agent import evals
+        self.FakeSession.log = []
+        fake = types.ModuleType("automc_core")
+        fake.Session = self.FakeSession
+        with mock.patch.dict(sys.modules, {"automc_core": fake}), \
+                mock.patch.object(automc_paths, "WORKSPACE", Path(tempfile.mkdtemp())), \
+                mock.patch.object(evals, "_job_ids", return_value=set()), \
+                mock.patch.object(evals, "_chat_jobs", return_value=list(jobs)), \
+                mock.patch.object(evals, "_status", return_value=status), \
+                mock.patch.object(evals, "_wait_for_chat_runs", side_effect=lambda before: self.FakeSession.log.append(("wait",))):
+            return evals.run_case(dict({"id": "c", "title": "t"}, **case), None, {})
+
+    def test_it_waits_between_turns_only_when_the_case_says_so(self):
+        rec = self.run_case({"turns": ["build and run", "what k?", "and the error?"], "wait_for_runs": True})
+        self.assertEqual(self.FakeSession.log, [("send", "build and run"), ("wait",), ("send", "what k?"), ("wait",),
+                                                ("send", "and the error?")])
+        self.assertEqual(rec["answers"], ["answer 1", "answer 2", "answer 3"])
+        self.run_case({"turns": ["one", "two"]})
+        self.assertNotIn(("wait",), self.FakeSession.log)
+
+    def test_it_records_how_the_chat_runs_ended(self):
+        rec = self.run_case({"turns": ["run"]}, jobs=[{"job_id": "j1", "approved_by": "chat"}])
+        self.assertEqual((rec["started"], rec["succeeded"], rec["ended"]), (True, True, ["success"]))
+        rec = self.run_case({"turns": ["run"]}, jobs=[{"job_id": "j1", "approved_by": "chat"}], status="failed")
+        self.assertEqual((rec["started"], rec["succeeded"]), (True, False))
+        rec = self.run_case({"turns": ["run"]})
+        self.assertEqual((rec["started"], rec["succeeded"], rec["ended"]), (False, False, []))
+
+    def test_waiting_ends_when_the_runs_end_and_fails_the_case_when_they_do_not(self):
+        from unittest import mock
+        from agent import evals
+        seen = iter(["running", "queued", "success"])
+        with mock.patch.object(evals, "_chat_jobs", return_value=[{"job_id": "j1"}]), \
+                mock.patch.object(evals, "_status", side_effect=lambda job_id: next(seen)), mock.patch.object(evals.time, "sleep"):
+            evals._wait_for_chat_runs(set())
+        with mock.patch.object(evals, "_chat_jobs", return_value=[{"job_id": "j1"}]), \
+                mock.patch.object(evals, "_status", return_value="running"), mock.patch.object(evals.time, "sleep"):
+            with self.assertRaisesRegex(RuntimeError, "did not finish within 0 s"):
+                evals._wait_for_chat_runs(set(), timeout=0)
+        with mock.patch.object(evals, "_chat_jobs", return_value=[]):
+            evals._wait_for_chat_runs(set(), timeout=0)                                      # nothing started: nothing to wait for
+
+
+def _why_no_fixture_runs():
+    try:
+        from tests.openmc.test_runs import SKIP
+    except ImportError as e:
+        return f"the run tests' module does not import here ({e})"
+    return SKIP
+
+
+@unittest.skipIf(_why_no_fixture_runs(), _why_no_fixture_runs() or "")
+class Fixtures(unittest.TestCase):
+    """The fixtures the new cases stand on, built for real in a throwaway workspace (seconds; the tokamak only when it is fetched)."""
+
+    @classmethod
+    def setUpClass(cls):
+        import os
+        from unittest import mock
+        import automc_paths
+        from tests.reactors.triga.test_build_config0 import _XS_FALLBACK
+        if not os.environ.get("OPENMC_CROSS_SECTIONS"):
+            os.environ["OPENMC_CROSS_SECTIONS"] = str(_XS_FALLBACK)
+        cls.ws = Path(tempfile.mkdtemp(prefix="automc_eval_fixtures_"))
+        cls.patch = mock.patch.object(automc_paths, "WORKSPACE", cls.ws)
+        cls.patch.start()
+
+    @classmethod
+    def tearDownClass(cls):
+        import shutil
+        from tools.openmc import jobs, runs
+        for j in jobs.list_jobs(jobs.home(cls.ws), active_only=True):
+            try:
+                runs.cancel(j["job_id"])
+            except Exception:
+                pass
+        cls.patch.stop()
+        shutil.rmtree(cls.ws, ignore_errors=True)
+
+    def test_the_lost_cell_run_fails_and_its_check_names_the_lost_particle_entry(self):
+        from agent import evals
+        from tools import registry
+        job_id = evals._lost_cell(self.ws)
+        result = registry.call("OpenMCRunCheckTool", {"job_id": job_id})
+        self.assertEqual(result["job"]["status"], "failed")
+        self.assertTrue(any("lost particles" in e["signature"] for e in result.get("known_errors", [])), result.get("known_errors"))
+        self.assertTrue(list((self.ws / "lost-cell").rglob("particle_*.h5")), "the lost particles' files are in the run folder")
+
+    def test_the_tokamak_setup_builds_a_case_whose_check_says_not_merged(self):
+        from agent import evals
+        from tools.openmc import authoring
+        missing = evals.missing_data({"setup": ["cad_tokamak"]})
+        if missing:
+            self.skipTest(f"{', '.join(missing)} is not in the data cache")
+        evals._cad_tokamak()
+        report = authoring.check_case("tokamak")
+        overlaps = " ".join(f["message"] for f in report["findings"] if f["check"] == "overlaps" and f["severity"] == "error")
+        self.assertIn("touching volumes are not merged", overlaps)
 
 
 @unittest.skipUnless(HAVE_YAML, "needs PyYAML")

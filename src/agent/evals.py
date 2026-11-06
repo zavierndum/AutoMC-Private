@@ -32,14 +32,19 @@ from pathlib import Path
 import automc_paths
 
 CASES_PATH = automc_paths.SRC / "evals" / "cases.yml"
-CASE_KEYS = {"id", "title", "turns", "setup", "needs", "approve", "expect"}
-EXPECT_KEYS = {"tools_required", "tools_any", "tools_forbidden", "approval_asked", "run_started", "answer_all", "answer_none",
-               "keff_with_error", "plan_kinds", "answer_from_pack"}
+CASE_KEYS = {"id", "title", "turns", "setup", "needs", "approve", "wait_for_runs", "expect"}
+EXPECT_KEYS = {"tools_required", "tools_any", "tools_forbidden", "approval_asked", "run_started", "run_succeeded", "answer_all",
+               "first_answer_all", "answer_none", "keff_with_error", "plan_kinds", "answer_from_pack"}
+ANSWER_GROUP_KEYS = ("answer_all", "first_answer_all")
 PACK_ANSWER_KEYS = ("answer_all", "answer_none")   # what the restricted pack's eval_answers may give a case
-SETUPS = {"slow_run"}
+SETUPS = {"slow_run", "cad_tokamak"}
+SETUP_DATA = {"cad_tokamak": ["cad/paramak_with_graveyard.h5m"]}   # the data cache's files a setup needs (needs: example_data)
+NEEDS = {"restricted_pack": "the restricted pack", "example_data": "example data from the data cache"}
 CLOUD_CASE_CAP = 400_000            # tokens per case of a cloud run: a first step alone is about 23k, a long case about ten steps
 RESTRICTED_PACK = "netl_restricted"  # the pack the needs: restricted_pack cases read
+RUN_WAIT_S = 600                    # wait_for_runs: the longest the harness waits for the chat's runs before the next turn
 _KEFF = re.compile(r"\d\.\d{2,}\s*(?:\+/-|±|\+-|plus or minus)\s*\d\.?\d*", re.IGNORECASE)
+_OPTIONS = re.compile(r"^OPTIONS = \{.*\}$", re.MULTILINE)          # a working example's variant line
 
 
 class CaseError(Exception):
@@ -70,8 +75,17 @@ def load_cases(path=None):
             if unknown:
                 raise CaseError(f"case {where}: {key} names unknown tools {unknown}")
         answers = _answers(c)
-        if set(c.get("setup", [])) - SETUPS or c.get("needs") not in (None, "restricted_pack") or not answers or None in answers:
-            raise CaseError(f"case {where}: setup must be from {sorted(SETUPS)}, needs restricted_pack, approve yes, no or a list of them")
+        if set(c.get("setup", [])) - SETUPS or c.get("needs") not in (None, *NEEDS) or not answers or None in answers:
+            raise CaseError(f"case {where}: setup must be from {sorted(SETUPS)}, needs one of {sorted(NEEDS)}, approve yes, no or a "
+                            f"list of them")
+        if (c.get("needs") == "example_data") != any(s in SETUP_DATA for s in c.get("setup", [])):
+            raise CaseError(f"case {where}: needs example_data goes with a setup that reads the data cache ({sorted(SETUP_DATA)}), "
+                            f"and such a setup with it")
+        for key, value in (("wait_for_runs", c.get("wait_for_runs")), ("run_succeeded", exp.get("run_succeeded"))):
+            if value is not None and not isinstance(value, bool):
+                raise CaseError(f"case {where}: {key} is true or false")
+        if "run_succeeded" in exp and not c.get("wait_for_runs"):
+            raise CaseError(f"case {where}: run_succeeded needs wait_for_runs, or the run may still be going when it is scored")
         _check_answers(f"case {where}", exp)
         if exp.get("answer_from_pack") not in (None, True) or (exp.get("answer_from_pack") and c.get("needs") != "restricted_pack"):
             raise CaseError(f"case {where}: answer_from_pack is true, and only in a case that needs the restricted pack")
@@ -83,16 +97,17 @@ def load_cases(path=None):
 
 
 def _check_answers(where, exp):
-    for group in exp.get("answer_all", []):
-        if not isinstance(group, list) or not group or not all(isinstance(a, str) for a in group):
-            raise CaseError(f"{where}: answer_all is a list of lists of alternatives (text)")
+    for key in ANSWER_GROUP_KEYS:
+        groups = exp.get(key, [])
+        if not isinstance(groups, list) or not all(isinstance(g, list) and g and all(isinstance(a, str) for a in g) for g in groups):
+            raise CaseError(f"{where}: {key} is a list of lists of alternatives (text)")
     none = exp.get("answer_none", [])
     if not isinstance(none, list) or not all(isinstance(a, str) for a in none):
         raise CaseError(f"{where}: answer_none is a list of phrases")
 
 
 def _phrases(exp):
-    return [a for group in exp.get("answer_all", []) for a in group] + list(exp.get("answer_none", []))
+    return [a for key in ANSWER_GROUP_KEYS for group in exp.get(key, []) for a in group] + list(exp.get("answer_none", []))
 
 
 def pack_answers(pack, cases):
@@ -158,9 +173,16 @@ def score(case, record, facts):
     if "run_started" in exp:
         out.append(("a run started" if exp["run_started"] else "no run started", record["started"] == exp["run_started"],
                     f"jobs started by the chat: {record['started']}"))
+    if "run_succeeded" in exp:
+        out.append(("a run succeeded" if exp["run_succeeded"] else "no run succeeded",
+                    record.get("succeeded", False) == exp["run_succeeded"], f"how the chat's jobs ended: {record.get('ended') or 'none'}"))
     for group in exp.get("answer_all", []):
         alts = [_plain(_fill(a, facts)) for a in group]
         out.append((f"answer says one of {alts}", any(a in answer for a in alts), ""))
+    first = _plain((record.get("answers") or [""])[0] or "")
+    for group in exp.get("first_answer_all", []):
+        alts = [_plain(_fill(a, facts)) for a in group]
+        out.append((f"first answer says one of {alts}", any(a in first for a in alts), ""))
     for phrase in exp.get("answer_none", []):
         out.append((f"answer does not say {phrase!r}", _plain(phrase) not in answer, ""))
     for kind in exp.get("plan_kinds", []):
@@ -192,6 +214,24 @@ def _write_sphere(folder, batches=8, particles=300, seed=1):
                  settings=s).export_to_model_xml(str(folder / "model.xml"))
 
 
+def _write_lost_cell(folder):
+    """A fixed-source water sphere whose shell between 12 and 13 cm is in no cell: particles leaving the inner cell are lost there,
+    and the run stops at OpenMC's lost-particle limit, leaving their particle files."""
+    import openmc
+    folder.mkdir(parents=True, exist_ok=True)
+    openmc.reset_auto_ids()
+    m = openmc.Material(name="water")
+    m.set_density("g/cm3", 1.0)
+    for nuc, ao in (("H1", 2.0), ("O16", 1.0)):
+        m.add_nuclide(nuc, ao)
+    inner, gap, outer = openmc.Sphere(r=12.0), openmc.Sphere(r=13.0), openmc.Sphere(r=20.0, boundary_type="vacuum")
+    cells = [openmc.Cell(name="inner water", fill=m, region=-inner), openmc.Cell(name="outer water", fill=m, region=+gap & -outer)]
+    s = openmc.Settings()
+    s.run_mode, s.particles, s.batches, s.seed = "fixed source", 1000, 5, 1
+    s.source = openmc.IndependentSource(space=openmc.stats.Point(), energy=openmc.stats.Discrete([2.0e6], [1.0]))
+    openmc.Model(geometry=openmc.Geometry(cells), materials=openmc.Materials([m]), settings=s).export_to_model_xml(str(folder / "model.xml"))
+
+
 def _wait(job_id, timeout=600):
     from tools.openmc import jobs, runs
     t = time.time()
@@ -203,6 +243,37 @@ def _wait(job_id, timeout=600):
     raise RuntimeError(f"fixture job {job_id} did not finish")
 
 
+def _lost_cell(ws):
+    """The shared failed run: the case lost-cell, run once; its job is failed in the registry. Returns the job id."""
+    from tools.openmc import runs
+    _write_lost_cell(ws / "lost-cell")
+    job = runs.start(runs.plan_run(case="lost-cell", threads=1), approved_by="eval-setup")
+    done = _wait(job["job_id"])
+    if done["status"] != "failed":
+        raise RuntimeError(f"the lost-cell fixture's run was meant to fail at the lost-particle limit; it ended {done['status']}")
+    return job["job_id"]
+
+
+def _cad_tokamak():
+    """The cad-geometry example's tokamak, whose CAD volumes touch without being merged, built as the case tokamak through the build
+    tool's path (its OPTIONS line set to the variant, as the agent would). Needs its file in the data cache (SETUP_DATA)."""
+    from tools import conversation
+    from tools.openmc import authoring
+    text = (automc_paths.SRC / "skills" / "working_examples" / "cad-geometry" / "build.py").read_text(encoding="utf-8")
+    script = _OPTIONS.sub(lambda m: "OPTIONS = " + json.dumps({"model": "tokamak", "size": "quick"}), text, count=1)
+    with conversation.inside(None, "public", "eval-setup", None):
+        built = authoring.start_build(authoring.plan_build("tokamak", script, overwrite=True, timeout_s=900), approved_by="eval-setup")
+    if not built.get("built"):
+        raise RuntimeError(f"the tokamak fixture did not build: {built.get('error')}")
+
+
+def missing_data(case):
+    """The data cache's files the case's setup needs and that are not there (or differ from data.json): [] when it can run."""
+    from tools.openmc import example_data
+    files = example_data.registry()
+    return [rel for s in case.get("setup", []) for rel in SETUP_DATA.get(s, []) if example_data.state(rel, files[rel]) != "ok"]
+
+
 def fixtures():
     from tools.openmc import runs
     from tools.reactors.triga import build_input
@@ -212,6 +283,7 @@ def fixtures():
     _write_sphere(ws / "sphere-pre")
     job = runs.start(runs.plan_run(case="sphere", threads=2), approved_by="eval-setup")
     done = _wait(job["job_id"])
+    _lost_cell(ws)
     build_input("openmc", "netl", preset="netl_public_fresh_fuel", name="c-pub", run={"particles": 1000, "batches": 3, "inactive": 1})
     _files_and_kb(ws)
     k = done["keff"]["value"]
@@ -299,17 +371,54 @@ def _approval_answer(case, n):
     return answers[min(n, len(answers) - 1)]
 
 
+def _job_ids():
+    from tools.openmc import jobs
+    return {j["job_id"] for j in jobs.list_jobs(jobs.home(automc_paths.WORKSPACE))}
+
+
+def _chat_jobs(before):
+    """The jobs the chat started (approved by its user) since `before`, the job ids there were then."""
+    from tools.openmc import jobs
+    return [j for j in jobs.list_jobs(jobs.home(automc_paths.WORKSPACE)) if j["job_id"] not in before and j.get("approved_by") == "chat"]
+
+
+def _status(job_id):
+    from tools.openmc import runs
+    try:
+        return runs.check(job_id=job_id)["status"]
+    except Exception as e:                                       # a job the check cannot read has not succeeded
+        return f"unreadable ({type(e).__name__})"
+
+
+def _wait_for_chat_runs(before, timeout=RUN_WAIT_S):
+    """Before the next turn of a wait_for_runs case: until every job the chat has started has ended. The agent never waits for a run
+    (it reports the job and stops); the harness waits for it, as a user would before asking for the result."""
+    from tools.openmc import jobs
+    t = time.time()
+    while True:
+        active = [j["job_id"] for j in _chat_jobs(before) if _status(j["job_id"]) in jobs.ACTIVE]
+        if not active:
+            return
+        if time.time() - t >= timeout:
+            raise RuntimeError(f"a run the chat started did not finish within {timeout} s ({', '.join(active)})")
+        time.sleep(1.0)
+
+
 def run_case(case, provider, facts):
     from automc_core import Session
     from tools.openmc import jobs, runs
     record = {"id": case["id"], "tools": [], "approvals": 0, "plan_kinds": [], "answers": [], "final": "", "started": False,
-              "error": None}
+              "succeeded": False, "ended": [], "error": None}
     slow = _slow_run() if "slow_run" in case.get("setup", []) else None
-    before = {j["job_id"] for j in jobs.list_jobs(jobs.home(automc_paths.WORKSPACE))}
+    before = _job_ids()
     t0 = time.time()
     try:
+        if "cad_tokamak" in case.get("setup", []):
+            _cad_tokamak()
         s = Session(provider=provider, surface="chat")
-        for turn in case["turns"]:
+        for n, turn in enumerate(case["turns"]):
+            if n and case.get("wait_for_runs"):
+                _wait_for_chat_runs(before)
             events = s.send(_fill(turn, facts))
             while events is not None:
                 nxt = None
@@ -330,8 +439,10 @@ def run_case(case, provider, facts):
     except Exception as e:                                       # a crash is a failed case, not a failed evaluation
         record["error"] = f"{type(e).__name__}: {e}"
     record["seconds"] = round(time.time() - t0, 1)
-    new = [j for j in jobs.list_jobs(jobs.home(automc_paths.WORKSPACE)) if j["job_id"] not in before]
-    record["started"] = any(j.get("approved_by") == "chat" for j in new)
+    mine = _chat_jobs(before)
+    record["started"] = bool(mine)
+    record["ended"] = [_status(j["job_id"]) for j in mine]
+    record["succeeded"] = "success" in record["ended"]
     for j in jobs.list_jobs(jobs.home(automc_paths.WORKSPACE), active_only=True):          # leave nothing running for the next case
         try:
             runs.cancel(j["job_id"])
@@ -410,6 +521,9 @@ def child(run_folder, provider_name, only):
                                                                                   "the local model" if p.cloud else "")}
             elif (case.get("expect") or {}).get("answer_from_pack") and case["id"] not in answers:
                 rec = {"id": case["id"], "skipped": "the restricted pack gives no answer phrases for it (provides.eval_answers)"}
+            elif case.get("needs") == "example_data" and missing_data(case):
+                rec = {"id": case["id"], "skipped": f"needs {', '.join(missing_data(case))} in the data cache (python -m automc data "
+                                                    f"fetch)"}
             else:
                 case = with_pack_answers(case, answers)
                 rec = run_case(case, p, facts)
@@ -477,7 +591,7 @@ def main(argv=None):
         version, cases = load_cases()
         print(f"{version}: {len(cases)} cases")
         for case in cases:
-            print(f"  {case['id']:24s} {case['title']}" + ("   (needs the restricted pack)" if case.get("needs") else ""))
+            print(f"  {case['id']:24s} {case['title']}" + (f"   (needs {NEEDS[case['needs']]})" if case.get("needs") else ""))
         return 0
     if a.command == "child":
         return child(a.run_folder, a.provider, set(a.case))

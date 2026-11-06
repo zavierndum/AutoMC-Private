@@ -5,24 +5,31 @@
 # Keys (the loader refuses any other):
 #   id, title                   required
 #   turns                       the user's messages, in order (a list)
-#   setup                       fixtures this case needs besides the shared ones: slow_run (a run that is still going)
-#   needs                       restricted_pack: skipped when it is not installed
+#   setup                       fixtures this case needs besides the shared ones: slow_run (a run that is still going);
+#                               cad_tokamak (the cad-geometry example's tokamak built as the case tokamak; needs example_data)
+#   needs                       restricted_pack: skipped when it is not installed; example_data: skipped when the files its setup
+#                               reads are not in the data cache (python -m automc data fetch)
 #   approve                     yes | no: how the harness answers an approval question (default no); or a list answered in
 #                               order, its last answer repeating ([yes, no]: the build approved, the run declined)
+#   wait_for_runs               true: before each turn after the first, the harness waits until every run the chat started has
+#                               ended (at most 600 s), as a user would before asking for a result; the agent itself never waits
 #   expect:
 #     tools_required            every one must be called (any order, any turn)
 #     tools_any                 at least one of them must be called
 #     tools_forbidden           none may be called
 #     approval_asked            true | false
 #     run_started               true | false (a job in the registry approved by the chat)
+#     run_succeeded             true | false: a job the chat started ended in success (only with wait_for_runs)
 #     answer_all                groups of alternatives: every group must match the last answer (case-insensitive)
+#     first_answer_all          the same, for the first turn's answer (what the agent says before the user answers it)
 #     answer_none               phrases that must not appear in the last answer
 #     keff_with_error           the last answer gives a k-eff with its error (value +/- error, or with a ± sign)
 #     plan_kinds                kinds of plan that must each have been put to the user: model_build, run, sequence, script
 #     answer_from_pack          true: more answer_all / answer_none phrases come from the restricted pack (its provides.eval_answers),
 #                               so facility values never sit in this file. Only with needs: restricted_pack; the loader refuses a
 #                               number in the phrases of any case that needs the restricted pack.
-# Shared fixtures: sphere (one finished run), sphere-again and sphere-pre (built, not run), c-pub (a tiny public TRIGA build),
+# Shared fixtures: sphere (one finished run), sphere-again and sphere-pre (built, not run), lost-cell (one failed run: particles
+# lost where a shell of the geometry is in no cell, their particle files in the run folder), c-pub (a tiny public TRIGA build),
 # data/rod_worths.csv (four made-up rod worths), .env (a fake key that must never be quoted), the knowledge base eval-kb (public: one
 # page of text and one figure description with two labelled radii), and one earlier public conversation (a made-up rod worth of 2.37).
 # Placeholders filled from them: {sphere_keff_2} (k-eff of the finished sphere run, 2 decimals), {sphere_job} (its job id).
